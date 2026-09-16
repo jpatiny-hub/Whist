@@ -83,7 +83,26 @@ Tests du moteur de règles (le cœur critique de l'app) :
 npm run test:server
 ```
 
-## Déploiement (accès centralisé pour plusieurs personnes)
+### Usage quotidien en local (un seul terminal, sans rechargement automatique)
+
+Pratique pour simplement utiliser l'app (pas pour développer dessus) : construit tout puis
+lance un unique processus qui sert l'API et l'app web sur `http://localhost:4000`.
+
+```bash
+npm run build
+npm start
+```
+
+Sous Windows, double-cliquer sur `start.bat` fait la même chose (`start-dev.bat` relance
+plutôt les deux serveurs de développement avec rechargement automatique, dans deux fenêtres).
+Sous Mac/Linux, `./start.sh` et `./start-dev.sh` sont les équivalents.
+
+⚠️ Cela reste un serveur qui tourne **sur cet ordinateur** : il faut que l'ordinateur reste
+allumé et le terminal ouvert pour que l'app soit accessible, y compris pour toi seul. Pour que
+d'autres personnes y accèdent en continu sans dépendre de ton PC, il faut un vrai déploiement
+(section suivante).
+
+## Déploiement (accès centralisé pour plusieurs personnes, en continu)
 
 L'app est conçue pour tourner comme **un seul service partagé** : chacun s'y connecte avec
 son compte depuis son téléphone (via son navigateur, avec possibilité d'« ajouter à l'écran
@@ -96,14 +115,15 @@ d'accueil » pour un usage type application).
    `DATABASE_URL` pointant vers la base — aucun autre changement de code n'est nécessaire.
 2. **Build & lancement** :
    ```bash
-   npm run build --workspace web
-   npm run --workspace server prisma:generate
-   npm run build --workspace server
+   npm run build
    npx prisma migrate deploy --schema server/prisma/schema.prisma
-   node server/dist/index.js
+   npm start
    ```
    Le serveur sert alors à la fois l'API (`/api/...`) et l'application web construite
-   (`web/dist`) sur le même port — une seule URL à partager avec le groupe.
+   (`web/dist`) sur le même port — une seule URL à partager avec le groupe. Contrairement à
+   un lancement en local sur ton PC, ce serveur doit tourner sur une machine qui reste
+   allumée en permanence (VPS, Fly.io, Railway...) pour que l'app soit accessible à tout
+   moment par le groupe.
 3. **Docker** : `server/Dockerfile` construit cette image en une étape (`docker build -f
    server/Dockerfile .`). Fournir `DATABASE_URL`, `JWT_SECRET` et `CORS_ORIGIN` en variables
    d'environnement au conteneur. Le déployer ensuite sur la plateforme de son choix (VPS,

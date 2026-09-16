@@ -1,5 +1,5 @@
-import 'dotenv/config';
 import cors from 'cors';
+import dotenv from 'dotenv';
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +8,11 @@ import { playersRouter } from './routes/players';
 import { gamesRouter } from './routes/games';
 import { handsRouter } from './routes/hands';
 import { statsRouter, contractsRouter } from './routes/stats';
+
+// Load server/.env explicitly (by file location, not by process cwd) so the
+// server also works when started from the repo root, e.g. `npm start`.
+const serverRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+dotenv.config({ path: path.join(serverRoot, '.env') });
 
 const app = express();
 
