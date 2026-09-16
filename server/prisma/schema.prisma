@@ -1,16 +1,14 @@
 // Whist scoreboard — data model.
 //
-// Uses SQLite by default so the whole app runs with zero external services.
-// To centralize data for a group hosted on a server, switch the datasource
-// below to "postgresql" and point DATABASE_URL at a real Postgres instance —
-// no other change is required (see README "Déploiement").
-//
-// Note: SQLite has no native enum type, so fields like contractCode,
-// trumpSuit and status are plain strings, validated at the API layer
-// against the rules engine / a fixed list of values.
+// Uses PostgreSQL so data survives redeploys/restarts on a hosted server
+// (e.g. a free Neon database) — see README "Déploiement". Fields like
+// contractCode, trumpSuit and status are plain strings (validated at the API
+// layer against the rules engine / a fixed list of values) rather than
+// Prisma enums, so the same schema also still works against SQLite if you
+// ever want a fully local, zero-service setup again.
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

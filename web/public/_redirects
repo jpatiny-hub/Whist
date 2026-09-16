@@ -1,0 +1,3 @@
+# Fallback pour le routage côté client (React Router) : toute URL profonde
+# (ex. /games/abc123) doit renvoyer index.html plutôt qu'une 404 Netlify.
+/*   /index.html   200

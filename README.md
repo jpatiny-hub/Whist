@@ -48,7 +48,7 @@ inchangés (-16, quel que soit le nombre de plis manqués). Cette règle est imp
 Monorepo npm workspaces :
 
 ```
-server/   API Express + TypeScript + Prisma (SQLite par défaut)
+server/   API Express + TypeScript + Prisma (PostgreSQL)
   src/rules/contracts.ts   moteur de calcul des points (pur, testé unitairement)
   src/routes/              auth, players, games, hands, stats, contracts
   prisma/schema.prisma     modèle de données
@@ -62,13 +62,18 @@ désynchroniser le score officiel de la partie.
 
 ## Développement local
 
-Prérequis : Node.js 20+.
+Prérequis : Node.js 20+, et une base PostgreSQL accessible (le plus simple : une base
+[Neon](https://neon.tech) gratuite — voir l'étape 1 de la section Déploiement ci-dessous pour
+en créer une en 2 minutes ; une même base Neon peut très bien servir à la fois pour tester en
+local et pour la vraie utilisation).
 
 ```bash
 npm install
 
 # Serveur (API sur http://localhost:4000)
-cp server/.env.example server/.env   # génère un JWT_SECRET différent avant un vrai déploiement !
+cp server/.env.example server/.env
+# → édite server/.env : colle ta chaîne de connexion Neon dans DATABASE_URL,
+#   et remplace JWT_SECRET par une valeur aléatoire à toi.
 npm run --workspace server prisma:migrate
 npm run dev:server
 
@@ -104,30 +109,68 @@ d'autres personnes y accèdent en continu sans dépendre de ton PC, il faut un v
 
 ## Déploiement (accès centralisé pour plusieurs personnes, en continu)
 
-L'app est conçue pour tourner comme **un seul service partagé** : chacun s'y connecte avec
-son compte depuis son téléphone (via son navigateur, avec possibilité d'« ajouter à l'écran
-d'accueil » pour un usage type application).
+Architecture retenue, entièrement gratuite et sans dépendre d'un PC personnel allumé :
 
-1. **Base de données** : SQLite convient pour un groupe d'amis (fichier unique, zéro
-   configuration). Pour davantage de robustesse (sauvegardes, accès concurrent plus
-   important), passer à PostgreSQL ne demande qu'un changement dans
-   `server/prisma/schema.prisma` (`provider = "postgresql"`) et une variable
-   `DATABASE_URL` pointant vers la base — aucun autre changement de code n'est nécessaire.
-2. **Build & lancement** :
-   ```bash
-   npm run build
-   npx prisma migrate deploy --schema server/prisma/schema.prisma
-   npm start
-   ```
-   Le serveur sert alors à la fois l'API (`/api/...`) et l'application web construite
-   (`web/dist`) sur le même port — une seule URL à partager avec le groupe. Contrairement à
-   un lancement en local sur ton PC, ce serveur doit tourner sur une machine qui reste
-   allumée en permanence (VPS, Fly.io, Railway...) pour que l'app soit accessible à tout
-   moment par le groupe.
-3. **Docker** : `server/Dockerfile` construit cette image en une étape (`docker build -f
-   server/Dockerfile .`). Fournir `DATABASE_URL`, `JWT_SECRET` et `CORS_ORIGIN` en variables
-   d'environnement au conteneur. Le déployer ensuite sur la plateforme de son choix (VPS,
-   Fly.io, Railway, etc.) puis partager l'URL publique à toutes les personnes qui doivent
-   pouvoir saisir ou consulter les parties.
-4. Pensez à générer un `JWT_SECRET` long et aléatoire pour la production (ne réutilisez pas
-   celui de développement).
+- **[Neon](https://neon.tech)** — base de données PostgreSQL gratuite et permanente (les
+  données ne s'effacent jamais, contrairement aux disques gratuits de la plupart des
+  hébergeurs d'application).
+- **[Render](https://render.com)** — héberge l'API (le dossier `server/`). Plan gratuit
+  possible ; seul inconvénient, le service se met en veille après 15 min d'inactivité et met
+  30-60s à redémarrer au premier accès suivant (aucun impact sur les données, qui restent sur
+  Neon).
+- **[Netlify](https://netlify.com)** — héberge l'application web (le dossier `web/`), servie
+  telle qu'elle est construite (`web/dist`) avec la redirection SPA de `web/public/_redirects`.
+
+### 1. Créer la base de données (Neon)
+
+1. Crée un compte sur [neon.tech](https://neon.tech) (connexion via GitHub la plus simple).
+2. Crée un nouveau projet (ex. nom `whist`).
+3. Copie la **chaîne de connexion** affichée (commence par `postgresql://...`) — c'est ton
+   `DATABASE_URL`.
+
+### 2. Déployer l'API (Render)
+
+1. Crée un compte sur [render.com](https://render.com) (connexion via GitHub).
+2. « New » → « Web Service » → connecte le dépôt GitHub `jpatiny-hub/Whist`.
+3. Configure :
+   - **Root Directory** : `server`
+   - **Runtime** : Node
+   - **Build Command** : `npm install && npx prisma migrate deploy && npx prisma generate`
+   - **Start Command** : `npm start`
+4. Dans « Environment », ajoute les variables :
+   - `DATABASE_URL` = la chaîne de connexion Neon copiée à l'étape précédente
+   - `JWT_SECRET` = une longue chaîne aléatoire (jamais celle du développement local)
+   - `CORS_ORIGIN` = `http://localhost:5173` pour l'instant (on la corrigera à l'étape 4)
+5. Déploie, puis note l'URL publique donnée par Render (ex.
+   `https://whist-api-xxxx.onrender.com`).
+
+### 3. Déployer l'application web (Netlify)
+
+1. Crée un compte sur [netlify.com](https://netlify.com) (connexion via GitHub).
+2. « Add new site » → « Import an existing project » → connecte le même dépôt GitHub.
+3. Configure :
+   - **Base directory** : `web`
+   - **Build command** : `npm run build`
+   - **Publish directory** : `dist`
+4. Dans les variables d'environnement du site, ajoute `VITE_API_URL` =
+   `<URL Render de l'étape 2>/api` (ex. `https://whist-api-xxxx.onrender.com/api`).
+5. Déploie, puis note l'URL Netlify donnée (ex. `https://whist-scoreboard.netlify.app`).
+
+### 4. Autoriser le frontend sur l'API
+
+Retourne sur Render → variables d'environnement du service → mets à jour `CORS_ORIGIN` avec
+l'URL Netlify obtenue à l'étape 3 (ex. `https://whist-scoreboard.netlify.app`), puis
+redéploie le service. C'est cette URL Netlify que tu partages avec ton groupe.
+
+### Mises à jour ultérieures
+
+Render et Netlify sont tous les deux connectés au dépôt GitHub : un `git push` sur la branche
+déployée déclenche automatiquement un nouveau build et déploiement des deux côtés — plus
+besoin d'intervenir manuellement une fois que c'est configuré.
+
+### Alternative : tout sur un seul serveur (VPS, Fly.io...)
+
+Pour héberger l'API et l'application web ensemble sur un seul serveur qui reste allumé en
+permanence (au lieu du trio Neon/Render/Netlify), `server/Dockerfile` construit une image
+unique qui sert les deux (`docker build -f server/Dockerfile .`), avec les mêmes variables
+d'environnement `DATABASE_URL`, `JWT_SECRET` et `CORS_ORIGIN`.
