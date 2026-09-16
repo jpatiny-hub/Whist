@@ -1,0 +1,132 @@
+// Whist scoreboard — data model.
+//
+// Uses SQLite by default so the whole app runs with zero external services.
+// To centralize data for a group hosted on a server, switch the datasource
+// below to "postgresql" and point DATABASE_URL at a real Postgres instance —
+// no other change is required (see README "Déploiement").
+//
+// Note: SQLite has no native enum type, so fields like contractCode,
+// trumpSuit and status are plain strings, validated at the API layer
+// against the rules engine / a fixed list of values.
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  createdPlayers Player[] @relation("PlayerCreatedBy")
+  createdGames   Game[]   @relation("GameCreatedBy")
+  playerProfile  Player?  @relation("PlayerAccount")
+}
+
+/// A recurring, named participant. Independent from User accounts so a
+/// group can record games for people who never log in themselves.
+model Player {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  createdByUserId String?
+  createdBy       User?   @relation("PlayerCreatedBy", fields: [createdByUserId], references: [id])
+
+  /// Optional link if this player also has a login account.
+  accountUserId String? @unique
+  account       User?   @relation("PlayerAccount", fields: [accountUserId], references: [id])
+
+  gamePlayers        GamePlayer[]
+  handDeclarations    HandDeclarationPlayer[]
+  handPlayerScores    HandPlayerScore[]
+  dealtHands          Hand[]                  @relation("HandDealer")
+}
+
+/// One playing session ("soirée"), grouping a sequence of hands between the same 4 players.
+model Game {
+  id        String    @id @default(cuid())
+  label     String?
+  status    String    @default("OPEN") // OPEN | CLOSED
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+
+  createdByUserId String?
+  createdBy       User?   @relation("GameCreatedBy", fields: [createdByUserId], references: [id])
+
+  players GamePlayer[]
+  hands   Hand[]
+}
+
+model GamePlayer {
+  id       String @id @default(cuid())
+  gameId   String
+  game     Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  playerId String
+  player   Player @relation(fields: [playerId], references: [id])
+  seat     Int // 0..3, fixed seating/dealing order for that game
+
+  @@unique([gameId, playerId])
+  @@unique([gameId, seat])
+}
+
+/// A single donne within a game.
+model Hand {
+  id          String   @id @default(cuid())
+  gameId      String
+  game        Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  handNumber  Int
+  dealerId    String
+  dealer      Player   @relation("HandDealer", fields: [dealerId], references: [id])
+  passedRound Boolean  @default(false) // "tour de passe": doubles next hand's points
+  pointsMultiplier Int @default(1)
+  createdAt   DateTime @default(now())
+
+  declarations     HandDeclaration[]
+  playerScores     HandPlayerScore[]
+
+  @@unique([gameId, handNumber])
+}
+
+/// One contract declaration within a hand. Most hands have exactly one;
+/// hands with simultaneous misère-family declarations have several.
+model HandDeclaration {
+  id           String  @id @default(cuid())
+  handId       String
+  hand         Hand    @relation(fields: [handId], references: [id], onDelete: Cascade)
+  contractCode String // matches a code in server/src/rules/contracts.ts, e.g. "EMBALLAGE_12"
+  trumpSuit    String? // COEUR | CARREAU | TREFLE | PIQUE
+  tricksWon    Int
+  success      Boolean
+
+  declarers HandDeclarationPlayer[]
+}
+
+model HandDeclarationPlayer {
+  id                String          @id @default(cuid())
+  handDeclarationId String
+  handDeclaration   HandDeclaration @relation(fields: [handDeclarationId], references: [id], onDelete: Cascade)
+  playerId          String
+  player            Player          @relation(fields: [playerId], references: [id])
+
+  @@unique([handDeclarationId, playerId])
+}
+
+/// Net point delta for one player on one hand (sum across all declarations that hand), already multiplied by pointsMultiplier.
+model HandPlayerScore {
+  id       String @id @default(cuid())
+  handId   String
+  hand     Hand   @relation(fields: [handId], references: [id], onDelete: Cascade)
+  playerId String
+  player   Player @relation(fields: [playerId], references: [id])
+  delta    Int
+
+  @@unique([handId, playerId])
+}

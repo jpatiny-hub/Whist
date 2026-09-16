@@ -1,0 +1,16 @@
+{
+  "name": "whist-scoreboard",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev --workspace server",
+    "dev:web": "npm run dev --workspace web",
+    "build:server": "npm run build --workspace server",
+    "build:web": "npm run build --workspace web",
+    "test:server": "npm test --workspace server"
+  }
+}
