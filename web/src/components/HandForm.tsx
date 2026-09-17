@@ -6,6 +6,7 @@ interface DeclarationDraft {
   key: number;
   family: string;
   contractCode: string;
+  /** One slot per required declarer ('' = not yet chosen). Length 1 for solo contracts, 2 for partnerships (Emballage/Trou). */
   declarerPlayerIds: string[];
   tricksWon: number;
   trumpSuit: TrumpSuit;
@@ -55,6 +56,7 @@ export default function HandForm({ gameId, seatedPlayers, contracts, defaultDeal
   useEffect(() => setDealerId(defaultDealerId), [defaultDealerId]);
 
   const families = useMemo(() => [...new Set(contracts.map((c) => c.family))], [contracts]);
+  const familyDef = (family: string) => contracts.find((c) => c.family === family);
 
   function updateDecl(key: number, patch: Partial<DeclarationDraft>) {
     setDeclarations((cur) => cur.map((d) => (d.key === key ? { ...d, ...patch } : d)));
@@ -66,46 +68,49 @@ export default function HandForm({ gameId, seatedPlayers, contracts, defaultDeal
     updateDecl(key, {
       family,
       contractCode: levels.length === 1 ? first.code : '',
-      declarerPlayerIds: [],
+      declarerPlayerIds: first?.partnership ? ['', ''] : [''],
       trumpSuit: null,
     });
   }
 
-  function toggleDeclarer(d: DeclarationDraft, playerId: string) {
-    const def = contracts.find((c) => c.code === d.contractCode);
-    const max = def?.partnership ? 2 : 1;
-    let next: string[];
-    if (d.declarerPlayerIds.includes(playerId)) {
-      next = d.declarerPlayerIds.filter((id) => id !== playerId);
-    } else if (d.declarerPlayerIds.length >= max) {
-      next = max === 1 ? [playerId] : d.declarerPlayerIds;
-    } else {
-      next = [...d.declarerPlayerIds, playerId];
+  function selectPlayer(d: DeclarationDraft, slot: number, playerId: string) {
+    const next = [...d.declarerPlayerIds];
+    next[slot] = next[slot] === playerId ? '' : playerId;
+    // A player can't fill two slots of the same declaration at once.
+    for (let i = 0; i < next.length; i++) {
+      if (i !== slot && next[i] === playerId) next[i] = '';
     }
     updateDecl(d.key, { declarerPlayerIds: next });
   }
 
-  const canAddMore = declarations.every((d) => {
-    const def = contracts.find((c) => c.code === d.contractCode);
-    return def?.allowsMultipleSimultaneous;
-  });
+  function declarationComplete(d: DeclarationDraft) {
+    const fam = familyDef(d.family);
+    if (!fam || !d.contractCode) return false;
+    const expected = fam.partnership ? 2 : 1;
+    if (d.declarerPlayerIds.filter(Boolean).length !== expected) return false;
+    if (fam.hasTrump && !d.trumpSuit) return false;
+    return true;
+  }
 
-  function addDeclaration() {
-    setDeclarations((cur) => [...cur, emptyDeclaration()]);
+  function addSimultaneous(afterKey: number) {
+    setDeclarations((cur) => {
+      const base = cur.find((d) => d.key === afterKey);
+      const next = emptyDeclaration();
+      if (base) {
+        const fam = familyDef(base.family);
+        next.family = base.family;
+        next.contractCode = base.contractCode;
+        next.declarerPlayerIds = fam?.partnership ? ['', ''] : [''];
+      }
+      return [...cur, next];
+    });
   }
 
   function removeDeclaration(key: number) {
     setDeclarations((cur) => (cur.length > 1 ? cur.filter((d) => d.key !== key) : cur));
   }
 
-  const isComplete = declarations.every((d) => {
-    const def = contracts.find((c) => c.code === d.contractCode);
-    if (!def) return false;
-    const expected = def.partnership ? 2 : 1;
-    if (d.declarerPlayerIds.length !== expected) return false;
-    if (def.hasTrump && !d.trumpSuit) return false;
-    return true;
-  });
+  const isComplete = declarations.length > 0 && declarations.every(declarationComplete);
 
   useEffect(() => {
     if (!isComplete) {
@@ -119,7 +124,7 @@ export default function HandForm({ gameId, seatedPlayers, contracts, defaultDeal
       body: JSON.stringify({
         declarations: declarations.map((d) => ({
           contractCode: d.contractCode,
-          declarerPlayerIds: d.declarerPlayerIds,
+          declarerPlayerIds: d.declarerPlayerIds.filter(Boolean),
           tricksWon: d.tricksWon,
           trumpSuit: d.trumpSuit,
         })),
@@ -162,7 +167,7 @@ export default function HandForm({ gameId, seatedPlayers, contracts, defaultDeal
           dealerId,
           declarations: declarations.map((d) => ({
             contractCode: d.contractCode,
-            declarerPlayerIds: d.declarerPlayerIds,
+            declarerPlayerIds: d.declarerPlayerIds.filter(Boolean),
             tricksWon: d.tricksWon,
             trumpSuit: d.trumpSuit,
           })),
@@ -195,9 +200,14 @@ export default function HandForm({ gameId, seatedPlayers, contracts, defaultDeal
       </div>
 
       {declarations.map((d, idx) => {
-        const family = d.family;
-        const def = contracts.find((c) => c.code === d.contractCode);
-        const levelOptions = family ? contracts.filter((c) => c.family === family) : [];
+        const fam = familyDef(d.family);
+        const levelDef = contracts.find((c) => c.code === d.contractCode);
+        const levelOptions = d.family ? contracts.filter((c) => c.family === d.family) : [];
+        const isLast = idx === declarations.length - 1;
+        const takenElsewhere = new Set(
+          declarations.filter((other) => other.key !== d.key).flatMap((other) => other.declarerPlayerIds.filter(Boolean)),
+        );
+
         return (
           <div className="declaration-row" key={d.key}>
             {declarations.length > 1 && (
@@ -209,6 +219,7 @@ export default function HandForm({ gameId, seatedPlayers, contracts, defaultDeal
               Déclaration {idx + 1}
             </p>
 
+            {/* 1. Type de contrat */}
             <div className="field">
               <label>Type de contrat</label>
               <div className="chip-row">
@@ -216,7 +227,7 @@ export default function HandForm({ gameId, seatedPlayers, contracts, defaultDeal
                   <button
                     key={f}
                     type="button"
-                    className={`chip small ${family === f ? 'selected' : ''}`}
+                    className={`chip small ${d.family === f ? 'selected' : ''}`}
                     onClick={() => setFamily(d.key, f)}
                   >
                     {FAMILY_LABELS[f] ?? f}
@@ -225,16 +236,56 @@ export default function HandForm({ gameId, seatedPlayers, contracts, defaultDeal
               </div>
             </div>
 
-            {family && levelOptions.length > 1 && (
+            {/* 2. Joueur(s) */}
+            {fam && (
               <div className="field">
-                <label>Niveau</label>
+                <label>Déclarant</label>
+                <div className="chip-row">
+                  {seatedPlayers.map((sp) => (
+                    <button
+                      key={sp.playerId}
+                      type="button"
+                      disabled={takenElsewhere.has(sp.playerId) || d.declarerPlayerIds[1] === sp.playerId}
+                      className={`chip small ${d.declarerPlayerIds[0] === sp.playerId ? 'selected' : ''}`}
+                      onClick={() => selectPlayer(d, 0, sp.playerId)}
+                    >
+                      {sp.player.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {fam?.partnership && (
+              <div className="field">
+                <label>Partenaire (celui qui emballe)</label>
+                <div className="chip-row">
+                  {seatedPlayers.map((sp) => (
+                    <button
+                      key={sp.playerId}
+                      type="button"
+                      disabled={takenElsewhere.has(sp.playerId) || d.declarerPlayerIds[0] === sp.playerId}
+                      className={`chip small ${d.declarerPlayerIds[1] === sp.playerId ? 'selected' : ''}`}
+                      onClick={() => selectPlayer(d, 1, sp.playerId)}
+                    >
+                      {sp.player.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 3. Annonce (niveau) */}
+            {d.family && levelOptions.length > 1 && (
+              <div className="field">
+                <label>Annonce</label>
                 <div className="chip-row">
                   {levelOptions.map((c) => (
                     <button
                       key={c.code}
                       type="button"
                       className={`chip small ${d.contractCode === c.code ? 'selected' : ''}`}
-                      onClick={() => updateDecl(d.key, { contractCode: c.code, declarerPlayerIds: [] })}
+                      onClick={() => updateDecl(d.key, { contractCode: c.code })}
                     >
                       {c.label}
                     </button>
@@ -243,7 +294,8 @@ export default function HandForm({ gameId, seatedPlayers, contracts, defaultDeal
               </div>
             )}
 
-            {def?.hasTrump && (
+            {/* 4. Atout (couleur dans laquelle partir) */}
+            {fam?.hasTrump && (
               <div className="field">
                 <label>Atout</label>
                 <div className="chip-row">
@@ -261,29 +313,12 @@ export default function HandForm({ gameId, seatedPlayers, contracts, defaultDeal
               </div>
             )}
 
-            {def && (
-              <div className="field">
-                <label>{def.partnership ? 'Déclarants (2 : celui qui propose + celui qui emballe)' : 'Déclarant'}</label>
-                <div className="chip-row">
-                  {seatedPlayers.map((sp) => (
-                    <button
-                      key={sp.playerId}
-                      type="button"
-                      className={`chip small ${d.declarerPlayerIds.includes(sp.playerId) ? 'selected' : ''}`}
-                      onClick={() => toggleDeclarer(d, sp.playerId)}
-                    >
-                      {sp.player.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {def && (
+            {/* 5. Plis réalisés */}
+            {levelDef && (
               <div className="field">
                 <label>
-                  Plis remportés par {def.partnership ? 'la paire' : 'le déclarant'}
-                  {def.exact ? ` (objectif exact : ${def.requiredTricks})` : ` (objectif : ${def.requiredTricks}+)`}
+                  Plis remportés par {fam?.partnership ? 'la paire' : 'le déclarant'}
+                  {levelDef.exact ? ` (objectif exact : ${levelDef.requiredTricks})` : ` (objectif : ${levelDef.requiredTricks}+)`}
                 </label>
                 <input
                   type="number"
@@ -295,16 +330,18 @@ export default function HandForm({ gameId, seatedPlayers, contracts, defaultDeal
               </div>
             )}
 
-            {def?.ruleNote && <p className="muted">{def.ruleNote}</p>}
+            {levelDef?.ruleNote && <p className="muted">{levelDef.ruleNote}</p>}
+
+            {/* 6. Case facultative pour ajouter un contrat simultané */}
+            {isLast && fam?.allowsMultipleSimultaneous && declarationComplete(d) && (
+              <label className="field" style={{ flexDirection: 'row', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input type="checkbox" checked={false} onChange={() => addSimultaneous(d.key)} />
+                Ajouter un contrat simultané (un autre joueur fait aussi {FAMILY_LABELS[d.family] ?? d.family})
+              </label>
+            )}
           </div>
         );
       })}
-
-      {canAddMore && (
-        <button type="button" className="btn ghost" onClick={addDeclaration} style={{ marginBottom: 14 }}>
-          + Ajouter une déclaration simultanée (misère multiple)
-        </button>
-      )}
 
       {previewError && <div className="error-box">{previewError}</div>}
       {preview && (
