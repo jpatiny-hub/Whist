@@ -1,10 +1,15 @@
 import { Router } from 'express';
 import { requireAuth } from '../auth/middleware';
-import { computeGameStats, computePlayerStats } from '../stats';
+import { computeGameStats, computeOverviewStats, computePlayerStats } from '../stats';
 import { CONTRACT_LADDER, CONTRACTS, listContracts, scoreContract } from '../rules/contracts';
 
 export const statsRouter = Router();
 statsRouter.use(requireAuth);
+
+statsRouter.get('/overview', async (_req, res) => {
+  const stats = await computeOverviewStats();
+  res.json({ stats });
+});
 
 statsRouter.get('/players/:id', async (req, res) => {
   const stats = await computePlayerStats(req.params.id);

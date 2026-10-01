@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '../api/client';
-import type { ContractDef, GamePlayer, TrumpSuit } from '../types';
+import type { ContractDef, GamePlayer, Hand, TrumpSuit } from '../types';
 
 interface DeclarationDraft {
   key: number;
@@ -43,17 +43,55 @@ interface Props {
   contracts: ContractDef[];
   defaultDealerId: string;
   onSubmitted: () => void;
+  /** When set, the form edits this already-recorded hand instead of creating a new one. */
+  editingHand?: Hand | null;
+  onCancelEdit?: () => void;
 }
 
-export default function HandForm({ gameId, seatedPlayers, contracts, defaultDealerId, onSubmitted }: Props) {
-  const [dealerId, setDealerId] = useState(defaultDealerId);
-  const [declarations, setDeclarations] = useState<DeclarationDraft[]>([emptyDeclaration()]);
+function declarationsFromHand(hand: Hand | null | undefined, contracts: ContractDef[]): DeclarationDraft[] {
+  if (!hand || hand.passedRound || hand.declarations.length === 0) return [emptyDeclaration()];
+  return hand.declarations.map((d) => {
+    const def = contracts.find((c) => c.code === d.contractCode);
+    return {
+      key: idCounter++,
+      family: def?.family ?? '',
+      contractCode: d.contractCode,
+      declarerPlayerIds: d.declarers.map((x) => x.playerId),
+      tricksWon: d.tricksWon,
+      trumpSuit: d.trumpSuit,
+    };
+  });
+}
+
+export default function HandForm({
+  gameId,
+  seatedPlayers,
+  contracts,
+  defaultDealerId,
+  onSubmitted,
+  editingHand = null,
+  onCancelEdit,
+}: Props) {
+  const isEditing = !!editingHand;
+  const [dealerId, setDealerId] = useState(editingHand?.dealerId ?? defaultDealerId);
+  const [declarations, setDeclarations] = useState<DeclarationDraft[]>(() => declarationsFromHand(editingHand, contracts));
   const [preview, setPreview] = useState<Record<string, number> | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => setDealerId(defaultDealerId), [defaultDealerId]);
+  useEffect(() => {
+    if (!isEditing) setDealerId(defaultDealerId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultDealerId]);
+
+  useEffect(() => {
+    setDealerId(editingHand?.dealerId ?? defaultDealerId);
+    setDeclarations(declarationsFromHand(editingHand, contracts));
+    setPreview(null);
+    setSubmitError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingHand?.id]);
 
   const families = useMemo(() => [...new Set(contracts.map((c) => c.family))], [contracts]);
   const familyDef = (family: string) => contracts.find((c) => c.family === family);
@@ -146,9 +184,11 @@ export default function HandForm({ gameId, seatedPlayers, contracts, defaultDeal
     setBusy(true);
     setSubmitError(null);
     try {
-      await api(`/games/${gameId}/hands`, { method: 'POST', body: JSON.stringify({ dealerId, isPasse: true }) });
+      const url = isEditing ? `/games/${gameId}/hands/${editingHand!.id}` : `/games/${gameId}/hands`;
+      await api(url, { method: isEditing ? 'PUT' : 'POST', body: JSON.stringify({ dealerId, isPasse: true }) });
       setDeclarations([emptyDeclaration()]);
       onSubmitted();
+      onCancelEdit?.();
     } catch (err) {
       setSubmitError(err instanceof ApiError ? err.message : 'Erreur');
     } finally {
@@ -161,8 +201,9 @@ export default function HandForm({ gameId, seatedPlayers, contracts, defaultDeal
     setBusy(true);
     setSubmitError(null);
     try {
-      await api(`/games/${gameId}/hands`, {
-        method: 'POST',
+      const url = isEditing ? `/games/${gameId}/hands/${editingHand!.id}` : `/games/${gameId}/hands`;
+      await api(url, {
+        method: isEditing ? 'PUT' : 'POST',
         body: JSON.stringify({
           dealerId,
           declarations: declarations.map((d) => ({
@@ -176,6 +217,7 @@ export default function HandForm({ gameId, seatedPlayers, contracts, defaultDeal
       setDeclarations([emptyDeclaration()]);
       setPreview(null);
       onSubmitted();
+      onCancelEdit?.();
     } catch (err) {
       setSubmitError(err instanceof ApiError ? err.message : 'Erreur');
     } finally {
@@ -185,7 +227,7 @@ export default function HandForm({ gameId, seatedPlayers, contracts, defaultDeal
 
   return (
     <div className="card">
-      <h2>Nouvelle donne</h2>
+      <h2>{isEditing ? `Modifier la donne ${editingHand!.handNumber}` : 'Nouvelle donne'}</h2>
       {submitError && <div className="error-box">{submitError}</div>}
 
       <div className="field">
@@ -363,11 +405,16 @@ export default function HandForm({ gameId, seatedPlayers, contracts, defaultDeal
 
       <div className="btn-row" style={{ marginTop: 14 }}>
         <button className="btn" disabled={!isComplete || busy} onClick={submit}>
-          Valider la donne
+          {isEditing ? 'Enregistrer les modifications' : 'Valider la donne'}
         </button>
         <button className="btn secondary" disabled={busy} onClick={submitPasse}>
           Tour de passe (personne n'annonce)
         </button>
+        {isEditing && (
+          <button className="btn ghost" disabled={busy} onClick={() => onCancelEdit?.()}>
+            Annuler
+          </button>
+        )}
       </div>
     </div>
   );

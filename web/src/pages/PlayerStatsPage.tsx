@@ -84,22 +84,17 @@ export default function PlayerStatsPage() {
           <span>{stats.nemesis ? `${stats.nemesis.playerName} (${stats.nemesis.netPointDiff} pts)` : '—'}</span>
         </div>
         <div className="ladder-row">
-          <span>Meilleure victime</span>
+          <span>Souffre-douleur</span>
           <span>{stats.bestRival ? `${stats.bestRival.playerName} (+${stats.bestRival.netPointDiff} pts)` : '—'}</span>
         </div>
-      </div>
-
-      <div className="card">
-        <h2>Contrats déclarés (attaque)</h2>
-        {stats.contractStats.length === 0 && <p className="muted">Aucun contrat déclaré pour l'instant.</p>}
-        {stats.contractStats.map((c) => (
-          <div key={c.contractCode} className="ladder-row">
-            <span>{c.label}</span>
-            <span className="muted">
-              {c.timesDeclared}× — {c.successCount} réussi(s) / {c.failCount} échoué(s) ({Math.round(c.successRate * 100)}%)
-            </span>
-          </div>
-        ))}
+        <div className="ladder-row">
+          <span>Bête noire</span>
+          <span>
+            {stats.beteNoire
+              ? `${stats.beteNoire.playerName} (a fait échouer ${stats.beteNoire.failedAttacksAgainst} de ses attaques)`
+              : '—'}
+          </span>
+        </div>
       </div>
 
       <div className="card">
@@ -127,15 +122,35 @@ export default function PlayerStatsPage() {
               : '—'}
           </span>
         </div>
-        {stats.defenseStats.length === 0 && <p className="muted">Aucune défense enregistrée pour l'instant.</p>}
-        {stats.defenseStats.map((d) => (
-          <div key={d.contractCode} className="ladder-row">
-            <span>{d.label}</span>
-            <span className="muted">
-              {d.timesDefended}× — {d.successCount} contrat(s) battu(s) / {d.failCount} subi(s) ({Math.round(d.successRate * 100)}%)
-            </span>
-          </div>
-        ))}
+      </div>
+
+      <div className="card">
+        <h2>Détail par contrat</h2>
+        <p className="muted" style={{ marginTop: 0 }}>
+          Tous les contrats du jeu, même ceux jamais joués par ce joueur.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Contrat</th>
+              <th>Attaque</th>
+              <th>Défense</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stats.contractBreakdown.map((c) => (
+              <tr key={c.contractCode}>
+                <td>{c.label}</td>
+                <td className="muted">
+                  {c.timesDeclared > 0 ? `${c.timesDeclared}× (${Math.round(c.declaredSuccessRate * 100)}%)` : '—'}
+                </td>
+                <td className="muted">
+                  {c.timesDefended > 0 ? `${c.timesDefended}× (${Math.round(c.defendedSuccessRate * 100)}%)` : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       <div className="card">

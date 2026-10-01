@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { ContractDef, Game } from '../types';
@@ -11,6 +11,8 @@ export default function GamePage() {
   const [game, setGame] = useState<Game | null>(null);
   const [contracts, setContracts] = useState<ContractDef[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editingHandId, setEditingHandId] = useState<string | null>(null);
+  const formRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -46,6 +48,12 @@ export default function GamePage() {
   if (loading || !game) return <p className="muted">Chargement…</p>;
 
   const hands = game.hands ?? [];
+  const editingHand = hands.find((h) => h.id === editingHandId) ?? null;
+
+  function startEditing(handId: string) {
+    setEditingHandId(handId);
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 
   return (
     <div>
@@ -71,13 +79,17 @@ export default function GamePage() {
       </div>
 
       {game.status === 'OPEN' && contracts.length > 0 && (
-        <HandForm
-          gameId={game.id}
-          seatedPlayers={seatedPlayers}
-          contracts={contracts}
-          defaultDealerId={defaultDealerId}
-          onSubmitted={load}
-        />
+        <div ref={formRef}>
+          <HandForm
+            gameId={game.id}
+            seatedPlayers={seatedPlayers}
+            contracts={contracts}
+            defaultDealerId={defaultDealerId}
+            onSubmitted={load}
+            editingHand={editingHand}
+            onCancelEdit={() => setEditingHandId(null)}
+          />
+        </div>
       )}
 
       <div className="card">
@@ -88,6 +100,11 @@ export default function GamePage() {
             <p style={{ marginTop: 0 }}>
               <strong>Donne {hand.handNumber}</strong> — donneur : {hand.dealer.name}
               {hand.pointsMultiplier > 1 && <span className="badge fail" style={{ marginLeft: 8 }}>×{hand.pointsMultiplier}</span>}
+              {game.status === 'OPEN' && (
+                <button className="link-btn" style={{ marginLeft: 10, fontSize: 13 }} onClick={() => startEditing(hand.id)}>
+                  Modifier
+                </button>
+              )}
             </p>
             {hand.passedRound && <p className="muted">Tour de passe — personne n'a annoncé.</p>}
             {!hand.passedRound &&

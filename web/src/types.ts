@@ -96,6 +96,20 @@ export interface PairStat {
   timesPartnered: number;
   partnerSuccessCount: number;
   partnerFailCount: number;
+  failedAttacksAgainst: number;
+}
+
+export interface ContractBreakdown {
+  contractCode: string;
+  label: string;
+  timesDeclared: number;
+  declaredSuccessCount: number;
+  declaredFailCount: number;
+  declaredSuccessRate: number;
+  timesDefended: number;
+  defendedSuccessCount: number;
+  defendedFailCount: number;
+  defendedSuccessRate: number;
 }
 
 export interface DefenseStat {
@@ -129,7 +143,9 @@ export interface PlayerStats {
   favoritePartner: PairStat | null;
   nemesis: PairStat | null;
   bestRival: PairStat | null;
+  beteNoire: PairStat | null;
   pairStats: PairStat[];
+  contractBreakdown: ContractBreakdown[];
 }
 
 export interface GameStatsPlayer {
@@ -158,4 +174,33 @@ export interface ContractsResponse {
   ladder: string[];
   byCode: Record<string, ContractDef>;
   pointsTables: Record<string, PointsTableRow[]>;
+}
+
+export interface OverviewPlayer {
+  playerId: string;
+  playerName: string;
+  gamesPlayed: number;
+  gamesWon: number;
+  handsPlayed: number;
+  totalPoints: number;
+}
+
+export interface OverviewContractStat {
+  contractCode: string;
+  label: string;
+  timesDeclared: number;
+  successCount: number;
+  failCount: number;
+  successRate: number;
+}
+
+export interface OverviewStats {
+  players: OverviewPlayer[];
+  bestPlayer: OverviewPlayer | null;
+  mostGamesPlayed: OverviewPlayer | null;
+  globalContractStats: OverviewContractStat[];
+  mostPlayedContract: OverviewContractStat | null;
+  mostWonContract: OverviewContractStat | null;
+  mostLostContract: OverviewContractStat | null;
+  bestRatioContract: OverviewContractStat | null;
 }

@@ -1,5 +1,5 @@
 import { prisma } from './db';
-import { CONTRACTS } from './rules/contracts';
+import { CONTRACT_LADDER, CONTRACTS } from './rules/contracts';
 
 interface ContractStat {
   contractCode: string;
@@ -29,6 +29,21 @@ interface PairStat {
   timesPartnered: number;
   partnerSuccessCount: number;
   partnerFailCount: number;
+  /** Times this player's own attack (as declarer) failed while this person was one of the defenders. */
+  failedAttacksAgainst: number;
+}
+
+export interface ContractBreakdown {
+  contractCode: string;
+  label: string;
+  timesDeclared: number;
+  declaredSuccessCount: number;
+  declaredFailCount: number;
+  declaredSuccessRate: number;
+  timesDefended: number;
+  defendedSuccessCount: number;
+  defendedFailCount: number;
+  defendedSuccessRate: number;
 }
 
 export interface PlayerStats {
@@ -53,7 +68,10 @@ export interface PlayerStats {
   favoritePartner: PairStat | null;
   nemesis: PairStat | null;
   bestRival: PairStat | null;
+  /** The opponent who has most often been on the defending side of this player's failed attacks. */
+  beteNoire: PairStat | null;
   pairStats: PairStat[];
+  contractBreakdown: ContractBreakdown[];
 }
 
 export async function computePlayerStats(playerId: string): Promise<PlayerStats | null> {
@@ -81,7 +99,11 @@ export async function computePlayerStats(playerId: string): Promise<PlayerStats 
 
   const contractAgg = new Map<string, { declared: number; success: number; fail: number }>();
   const defenseAgg = new Map<string, { defended: number; success: number; fail: number }>();
-  const pairAgg = new Map<string, { handsTogether: number; netPointDiff: number; partnered: number; partnerSuccess: number; partnerFail: number }>();
+  const pairAgg = new Map<
+    string,
+    { handsTogether: number; netPointDiff: number; partnered: number; partnerSuccess: number; partnerFail: number; failedAttacksAgainst: number }
+  >();
+  const emptyPairAgg = () => ({ handsTogether: 0, netPointDiff: 0, partnered: 0, partnerSuccess: 0, partnerFail: 0, failedAttacksAgainst: 0 });
   const otherPlayerNames = new Map<string, string>();
 
   let handsPlayed = 0;
@@ -110,7 +132,7 @@ export async function computePlayerStats(playerId: string): Promise<PlayerStats 
         gameTotals.set(s.playerId, (gameTotals.get(s.playerId) ?? 0) + s.delta);
         if (s.playerId !== playerId && myScore) {
           const key = s.playerId;
-          const cur = pairAgg.get(key) ?? { handsTogether: 0, netPointDiff: 0, partnered: 0, partnerSuccess: 0, partnerFail: 0 };
+          const cur = pairAgg.get(key) ?? emptyPairAgg();
           cur.handsTogether += 1;
           cur.netPointDiff += myScore.delta - s.delta;
           pairAgg.set(key, cur);
@@ -128,11 +150,21 @@ export async function computePlayerStats(playerId: string): Promise<PlayerStats 
 
           for (const otherId of declarerIds) {
             if (otherId === playerId) continue;
-            const cur = pairAgg.get(otherId) ?? { handsTogether: 0, netPointDiff: 0, partnered: 0, partnerSuccess: 0, partnerFail: 0 };
+            const cur = pairAgg.get(otherId) ?? emptyPairAgg();
             cur.partnered += 1;
             if (decl.success) cur.partnerSuccess += 1;
             else cur.partnerFail += 1;
             pairAgg.set(otherId, cur);
+          }
+
+          if (!decl.success) {
+            // My attack failed: credit every defender of this declaration.
+            for (const gp of game.players) {
+              if (declarerIds.includes(gp.playerId)) continue;
+              const cur = pairAgg.get(gp.playerId) ?? emptyPairAgg();
+              cur.failedAttacksAgainst += 1;
+              pairAgg.set(gp.playerId, cur);
+            }
           }
         } else {
           // Not a declarer on this declaration: this player was defending against it.
@@ -176,6 +208,7 @@ export async function computePlayerStats(playerId: string): Promise<PlayerStats 
     timesPartnered: agg.partnered,
     partnerSuccessCount: agg.partnerSuccess,
     partnerFailCount: agg.partnerFail,
+    failedAttacksAgainst: agg.failedAttacksAgainst,
   }));
 
   const defenseStats: DefenseStat[] = [...defenseAgg.entries()]
@@ -201,6 +234,25 @@ export async function computePlayerStats(playerId: string): Promise<PlayerStats 
     [...pairStats].filter((p) => p.timesPartnered > 0).sort((a, b) => b.timesPartnered - a.timesPartnered)[0] ?? null;
   const nemesis = [...pairStats].filter((p) => p.handsTogether >= 3).sort((a, b) => a.netPointDiff - b.netPointDiff)[0] ?? null;
   const bestRival = [...pairStats].filter((p) => p.handsTogether >= 3).sort((a, b) => b.netPointDiff - a.netPointDiff)[0] ?? null;
+  const beteNoire =
+    [...pairStats].filter((p) => p.failedAttacksAgainst > 0).sort((a, b) => b.failedAttacksAgainst - a.failedAttacksAgainst)[0] ?? null;
+
+  const contractBreakdown: ContractBreakdown[] = CONTRACT_LADDER.map((code) => {
+    const atk = contractAgg.get(code);
+    const def = defenseAgg.get(code);
+    return {
+      contractCode: code,
+      label: CONTRACTS[code]?.label ?? code,
+      timesDeclared: atk?.declared ?? 0,
+      declaredSuccessCount: atk?.success ?? 0,
+      declaredFailCount: atk?.fail ?? 0,
+      declaredSuccessRate: atk && atk.declared > 0 ? atk.success / atk.declared : 0,
+      timesDefended: def?.defended ?? 0,
+      defendedSuccessCount: def?.success ?? 0,
+      defendedFailCount: def?.fail ?? 0,
+      defendedSuccessRate: def && def.defended > 0 ? def.success / def.defended : 0,
+    };
+  });
 
   return {
     playerId,
@@ -224,7 +276,9 @@ export async function computePlayerStats(playerId: string): Promise<PlayerStats 
     favoritePartner,
     nemesis,
     bestRival,
+    beteNoire,
     pairStats: pairStats.sort((a, b) => b.handsTogether - a.handsTogether),
+    contractBreakdown,
   };
 }
 
@@ -325,4 +379,133 @@ export async function computeGameStats(gameId: string) {
   }));
 
   return { gameId, players, evolution };
+}
+
+export interface OverviewPlayer {
+  playerId: string;
+  playerName: string;
+  gamesPlayed: number;
+  gamesWon: number;
+  handsPlayed: number;
+  totalPoints: number;
+}
+
+export interface OverviewContractStat {
+  contractCode: string;
+  label: string;
+  timesDeclared: number;
+  successCount: number;
+  failCount: number;
+  successRate: number;
+}
+
+export interface OverviewStats {
+  players: OverviewPlayer[];
+  bestPlayer: OverviewPlayer | null;
+  mostGamesPlayed: OverviewPlayer | null;
+  globalContractStats: OverviewContractStat[];
+  mostPlayedContract: OverviewContractStat | null;
+  mostWonContract: OverviewContractStat | null;
+  mostLostContract: OverviewContractStat | null;
+  bestRatioContract: OverviewContractStat | null;
+}
+
+/** Minimum number of announcements before a contract is eligible for the "best win ratio" spotlight, to avoid a lone 1/1 dominating. */
+const MIN_DECLARED_FOR_RATIO = 3;
+
+export async function computeOverviewStats(): Promise<OverviewStats> {
+  const players = await prisma.player.findMany();
+  const games = await prisma.game.findMany({
+    include: {
+      players: true,
+      hands: {
+        include: {
+          declarations: { include: { declarers: true } },
+          playerScores: true,
+        },
+      },
+    },
+  });
+
+  const perPlayer = new Map<string, { gamesPlayed: number; gamesWon: number; handsPlayed: number; totalPoints: number }>();
+  for (const p of players) perPlayer.set(p.id, { gamesPlayed: 0, gamesWon: 0, handsPlayed: 0, totalPoints: 0 });
+
+  const globalAgg = new Map<string, { declared: number; success: number; fail: number }>();
+
+  for (const game of games) {
+    const gameTotals = new Map<string, number>();
+    for (const gp of game.players) {
+      const entry = perPlayer.get(gp.playerId);
+      if (entry) entry.gamesPlayed += 1;
+      gameTotals.set(gp.playerId, 0);
+    }
+    for (const hand of game.hands) {
+      for (const s of hand.playerScores) {
+        gameTotals.set(s.playerId, (gameTotals.get(s.playerId) ?? 0) + s.delta);
+        const entry = perPlayer.get(s.playerId);
+        if (entry) {
+          entry.handsPlayed += 1;
+          entry.totalPoints += s.delta;
+        }
+      }
+      for (const decl of hand.declarations) {
+        const agg = globalAgg.get(decl.contractCode) ?? { declared: 0, success: 0, fail: 0 };
+        agg.declared += 1;
+        if (decl.success) agg.success += 1;
+        else agg.fail += 1;
+        globalAgg.set(decl.contractCode, agg);
+      }
+    }
+    if (gameTotals.size > 0) {
+      const max = Math.max(...gameTotals.values());
+      for (const [playerId, total] of gameTotals) {
+        if (total === max) {
+          const entry = perPlayer.get(playerId);
+          if (entry) entry.gamesWon += 1;
+        }
+      }
+    }
+  }
+
+  const overviewPlayers: OverviewPlayer[] = players
+    .map((p) => {
+      const agg = perPlayer.get(p.id)!;
+      return { playerId: p.id, playerName: p.name, ...agg };
+    })
+    .sort((a, b) => b.totalPoints - a.totalPoints);
+
+  const bestPlayer = overviewPlayers.filter((p) => p.gamesPlayed > 0).sort((a, b) => b.totalPoints - a.totalPoints)[0] ?? null;
+  const mostGamesPlayed = [...overviewPlayers].sort((a, b) => b.gamesPlayed - a.gamesPlayed)[0] ?? null;
+
+  const globalContractStats: OverviewContractStat[] = CONTRACT_LADDER.map((code) => {
+    const agg = globalAgg.get(code);
+    return {
+      contractCode: code,
+      label: CONTRACTS[code]?.label ?? code,
+      timesDeclared: agg?.declared ?? 0,
+      successCount: agg?.success ?? 0,
+      failCount: agg?.fail ?? 0,
+      successRate: agg && agg.declared > 0 ? agg.success / agg.declared : 0,
+    };
+  });
+
+  const declaredOnly = globalContractStats.filter((c) => c.timesDeclared > 0);
+  const mostPlayedContract = [...declaredOnly].sort((a, b) => b.timesDeclared - a.timesDeclared)[0] ?? null;
+  const mostWonContract = [...declaredOnly].sort((a, b) => b.successCount - a.successCount)[0] ?? null;
+  const mostLostContract = [...declaredOnly].sort((a, b) => b.failCount - a.failCount)[0] ?? null;
+  const bestRatioContract =
+    declaredOnly
+      .filter((c) => c.timesDeclared >= MIN_DECLARED_FOR_RATIO)
+      .sort((a, b) => b.successRate - a.successRate || b.timesDeclared - a.timesDeclared)[0] ?? null;
+
+  return {
+    players: overviewPlayers,
+    bestPlayer,
+    mostGamesPlayed,
+    globalContractStats,
+    mostPlayedContract,
+    mostWonContract,
+    mostLostContract,
+    bestRatioContract,
+  };
 }

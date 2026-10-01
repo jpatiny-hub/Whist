@@ -164,6 +164,104 @@ handsRouter.post('/', async (req, res) => {
   res.status(201).json({ hand, deltas: scored.deltas, pointsMultiplier });
 });
 
+handsRouter.put('/:handId', async (req, res) => {
+  const { gameId, handId } = req.params as { gameId: string; handId: string };
+  const parsed = createHandSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Requête invalide' });
+  }
+  const game = await loadGamePlayers(gameId);
+  if (!game) return res.status(404).json({ error: 'Partie introuvable' });
+  if (game.status === 'CLOSED') return res.status(400).json({ error: 'La partie est clôturée, modification impossible' });
+
+  const existingHand = await prisma.hand.findUnique({ where: { id: handId } });
+  if (!existingHand || existingHand.gameId !== gameId) return res.status(404).json({ error: 'Donne introuvable' });
+
+  const validPlayerIds = new Set(game.players.map((p) => p.playerId));
+  if (!validPlayerIds.has(parsed.data.dealerId)) {
+    return res.status(400).json({ error: "Le donneur doit être l'un des 4 joueurs de la partie" });
+  }
+  const allPlayerIds = game.players
+    .slice()
+    .sort((a, b) => a.seat - b.seat)
+    .map((p) => p.playerId) as [string, string, string, string];
+
+  if (parsed.data.isPasse) {
+    const hand = await prisma.$transaction(async (tx) => {
+      await tx.handDeclaration.deleteMany({ where: { handId } });
+      await tx.handPlayerScore.deleteMany({ where: { handId } });
+      return tx.hand.update({
+        where: { id: handId },
+        data: { dealerId: parsed.data.dealerId, passedRound: true },
+        include: {
+          dealer: true,
+          declarations: { include: { declarers: { include: { player: true } } } },
+          playerScores: { include: { player: true } },
+        },
+      });
+    });
+    return res.json({ hand, deltas: {} });
+  }
+
+  const declarations = parsed.data.declarations ?? [];
+  const validationError = validateDeclarations(declarations, validPlayerIds);
+  if (validationError) return res.status(400).json({ error: validationError });
+
+  let scored;
+  try {
+    const engineInput: HandDeclaration[] = declarations.map((d) => ({
+      contractCode: d.contractCode,
+      declarerPlayerIds: d.declarerPlayerIds,
+      tricksWon: d.tricksWon,
+      trumpSuit: (d.trumpSuit ?? null) as TrumpSuit,
+    }));
+    scored = scoreHand(engineInput, allPlayerIds);
+  } catch (e) {
+    return res.status(400).json({ error: e instanceof Error ? e.message : 'Erreur de calcul' });
+  }
+
+  // Editing never changes which "tour de passe" came before it, so the doubling stays as originally computed.
+  const pointsMultiplier = existingHand.pointsMultiplier;
+
+  const hand = await prisma.$transaction(async (tx) => {
+    await tx.handDeclaration.deleteMany({ where: { handId } });
+    await tx.handPlayerScore.deleteMany({ where: { handId } });
+    await tx.hand.update({ where: { id: handId }, data: { dealerId: parsed.data.dealerId, passedRound: false } });
+
+    for (let i = 0; i < declarations.length; i++) {
+      const decl = declarations[i];
+      const outcome = scored.outcomes[i];
+      await tx.handDeclaration.create({
+        data: {
+          handId,
+          contractCode: decl.contractCode,
+          trumpSuit: decl.trumpSuit ?? null,
+          tricksWon: decl.tricksWon,
+          success: outcome.success,
+          declarers: { create: decl.declarerPlayerIds.map((playerId) => ({ playerId })) },
+        },
+      });
+    }
+
+    for (const playerId of allPlayerIds) {
+      await tx.handPlayerScore.create({
+        data: { handId, playerId, delta: scored.deltas[playerId] * pointsMultiplier },
+      });
+    }
+
+    return tx.hand.findUnique({
+      where: { id: handId },
+      include: {
+        dealer: true,
+        declarations: { include: { declarers: { include: { player: true } } } },
+        playerScores: { include: { player: true } },
+      },
+    });
+  });
+
+  res.json({ hand, deltas: scored.deltas, pointsMultiplier });
+});
+
 handsRouter.post('/preview', async (req, res) => {
   const gameId = (req.params as { gameId: string }).gameId;
   const game = await loadGamePlayers(gameId);
