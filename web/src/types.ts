@@ -98,6 +98,15 @@ export interface PairStat {
   partnerFailCount: number;
 }
 
+export interface DefenseStat {
+  contractCode: string;
+  label: string;
+  timesDefended: number;
+  successCount: number;
+  failCount: number;
+  successRate: number;
+}
+
 export interface PlayerStats {
   playerId: string;
   playerName: string;
@@ -110,6 +119,13 @@ export interface PlayerStats {
   favoriteContract: ContractStat | null;
   mostSuccessfulContract: ContractStat | null;
   mostFailedContract: ContractStat | null;
+  defenseStats: DefenseStat[];
+  totalDefended: number;
+  totalDefenseWon: number;
+  defenseSuccessRate: number;
+  mostFacedContract: DefenseStat | null;
+  bestDefendedContract: DefenseStat | null;
+  worstDefendedContract: DefenseStat | null;
   favoritePartner: PairStat | null;
   nemesis: PairStat | null;
   bestRival: PairStat | null;
@@ -121,6 +137,7 @@ export interface GameStatsPlayer {
   playerName: string;
   totalPoints: number;
   contractStats: ContractStat[];
+  defenseStats: DefenseStat[];
 }
 
 export interface GameStats {

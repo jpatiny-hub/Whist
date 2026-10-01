@@ -33,12 +33,27 @@ export default function GameStatsPage() {
                 {p.totalPoints} pts
               </span>
             </h2>
+            <p className="muted" style={{ marginTop: 0, marginBottom: 4 }}>
+              Attaque
+            </p>
             {p.contractStats.length === 0 && <p className="muted">Aucun contrat déclaré.</p>}
             {p.contractStats.map((c) => (
               <div key={c.contractCode} className="ladder-row">
                 <span>{c.label}</span>
                 <span className="muted">
                   {c.timesDeclared}× — {c.successCount} réussi(s), {c.failCount} échoué(s)
+                </span>
+              </div>
+            ))}
+            <p className="muted" style={{ marginTop: 14, marginBottom: 4 }}>
+              Défense
+            </p>
+            {p.defenseStats.length === 0 && <p className="muted">Aucune défense enregistrée.</p>}
+            {p.defenseStats.map((d) => (
+              <div key={d.contractCode} className="ladder-row">
+                <span>{d.label}</span>
+                <span className="muted">
+                  {d.timesDefended}× — {d.successCount} battu(s), {d.failCount} subi(s)
                 </span>
               </div>
             ))}

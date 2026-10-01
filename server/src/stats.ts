@@ -10,6 +10,17 @@ interface ContractStat {
   successRate: number;
 }
 
+interface DefenseStat {
+  contractCode: string;
+  label: string;
+  timesDefended: number;
+  /** Times the contract failed while this player was a defender (the defense "won"). */
+  successCount: number;
+  /** Times the contract succeeded anyway (the defense "lost"). */
+  failCount: number;
+  successRate: number;
+}
+
 interface PairStat {
   playerId: string;
   playerName: string;
@@ -32,6 +43,13 @@ export interface PlayerStats {
   favoriteContract: ContractStat | null;
   mostSuccessfulContract: ContractStat | null;
   mostFailedContract: ContractStat | null;
+  defenseStats: DefenseStat[];
+  totalDefended: number;
+  totalDefenseWon: number;
+  defenseSuccessRate: number;
+  mostFacedContract: DefenseStat | null;
+  bestDefendedContract: DefenseStat | null;
+  worstDefendedContract: DefenseStat | null;
   favoritePartner: PairStat | null;
   nemesis: PairStat | null;
   bestRival: PairStat | null;
@@ -62,6 +80,7 @@ export async function computePlayerStats(playerId: string): Promise<PlayerStats 
   });
 
   const contractAgg = new Map<string, { declared: number; success: number; fail: number }>();
+  const defenseAgg = new Map<string, { defended: number; success: number; fail: number }>();
   const pairAgg = new Map<string, { handsTogether: number; netPointDiff: number; partnered: number; partnerSuccess: number; partnerFail: number }>();
   const otherPlayerNames = new Map<string, string>();
 
@@ -115,6 +134,13 @@ export async function computePlayerStats(playerId: string): Promise<PlayerStats 
             else cur.partnerFail += 1;
             pairAgg.set(otherId, cur);
           }
+        } else {
+          // Not a declarer on this declaration: this player was defending against it.
+          const agg = defenseAgg.get(decl.contractCode) ?? { defended: 0, success: 0, fail: 0 };
+          agg.defended += 1;
+          if (decl.success) agg.fail += 1; // the contract succeeded despite the defense
+          else agg.success += 1; // the defense beat the contract
+          defenseAgg.set(decl.contractCode, agg);
         }
       }
     }
@@ -152,6 +178,25 @@ export async function computePlayerStats(playerId: string): Promise<PlayerStats 
     partnerFailCount: agg.partnerFail,
   }));
 
+  const defenseStats: DefenseStat[] = [...defenseAgg.entries()]
+    .map(([code, agg]) => ({
+      contractCode: code,
+      label: CONTRACTS[code]?.label ?? code,
+      timesDefended: agg.defended,
+      successCount: agg.success,
+      failCount: agg.fail,
+      successRate: agg.defended > 0 ? agg.success / agg.defended : 0,
+    }))
+    .sort((a, b) => b.timesDefended - a.timesDefended);
+
+  const totalDefended = defenseStats.reduce((sum, d) => sum + d.timesDefended, 0);
+  const totalDefenseWon = defenseStats.reduce((sum, d) => sum + d.successCount, 0);
+  const mostFacedContract = defenseStats[0] ?? null;
+  const bestDefendedContract =
+    [...defenseStats].sort((a, b) => b.successRate - a.successRate || b.timesDefended - a.timesDefended)[0] ?? null;
+  const worstDefendedContract =
+    [...defenseStats].sort((a, b) => 1 - a.successRate - (1 - b.successRate) || b.timesDefended - a.timesDefended)[0] ?? null;
+
   const favoritePartner =
     [...pairStats].filter((p) => p.timesPartnered > 0).sort((a, b) => b.timesPartnered - a.timesPartnered)[0] ?? null;
   const nemesis = [...pairStats].filter((p) => p.handsTogether >= 3).sort((a, b) => a.netPointDiff - b.netPointDiff)[0] ?? null;
@@ -169,6 +214,13 @@ export async function computePlayerStats(playerId: string): Promise<PlayerStats 
     favoriteContract,
     mostSuccessfulContract,
     mostFailedContract,
+    defenseStats,
+    totalDefended,
+    totalDefenseWon,
+    defenseSuccessRate: totalDefended > 0 ? totalDefenseWon / totalDefended : 0,
+    mostFacedContract,
+    bestDefendedContract,
+    worstDefendedContract,
     favoritePartner,
     nemesis,
     bestRival,
@@ -181,6 +233,7 @@ export interface GameStatsPlayer {
   playerName: string;
   totalPoints: number;
   contractStats: ContractStat[];
+  defenseStats: DefenseStat[];
 }
 
 export async function computeGameStats(gameId: string) {
@@ -199,9 +252,17 @@ export async function computeGameStats(gameId: string) {
   });
   if (!game) return null;
 
-  const perPlayer = new Map<string, { name: string; total: number; contractAgg: Map<string, { declared: number; success: number; fail: number }> }>();
+  const perPlayer = new Map<
+    string,
+    {
+      name: string;
+      total: number;
+      contractAgg: Map<string, { declared: number; success: number; fail: number }>;
+      defenseAgg: Map<string, { defended: number; success: number; fail: number }>;
+    }
+  >();
   for (const gp of game.players) {
-    perPlayer.set(gp.playerId, { name: gp.player.name, total: 0, contractAgg: new Map() });
+    perPlayer.set(gp.playerId, { name: gp.player.name, total: 0, contractAgg: new Map(), defenseAgg: new Map() });
   }
 
   const evolution: { handNumber: number; totals: Record<string, number> }[] = [];
@@ -215,6 +276,7 @@ export async function computeGameStats(gameId: string) {
       runningTotals[s.playerId] = (runningTotals[s.playerId] ?? 0) + s.delta;
     }
     for (const decl of hand.declarations) {
+      const declarerIds = decl.declarers.map((d) => d.playerId);
       for (const d of decl.declarers) {
         const entry = perPlayer.get(d.playerId);
         if (!entry) continue;
@@ -223,6 +285,14 @@ export async function computeGameStats(gameId: string) {
         if (decl.success) agg.success += 1;
         else agg.fail += 1;
         entry.contractAgg.set(decl.contractCode, agg);
+      }
+      for (const [playerId, entry] of perPlayer) {
+        if (declarerIds.includes(playerId)) continue;
+        const agg = entry.defenseAgg.get(decl.contractCode) ?? { defended: 0, success: 0, fail: 0 };
+        agg.defended += 1;
+        if (decl.success) agg.fail += 1;
+        else agg.success += 1;
+        entry.defenseAgg.set(decl.contractCode, agg);
       }
     }
     evolution.push({ handNumber: hand.handNumber, totals: { ...runningTotals } });
@@ -242,6 +312,16 @@ export async function computeGameStats(gameId: string) {
         successRate: agg.declared > 0 ? agg.success / agg.declared : 0,
       }))
       .sort((a, b) => b.timesDeclared - a.timesDeclared),
+    defenseStats: [...v.defenseAgg.entries()]
+      .map(([code, agg]) => ({
+        contractCode: code,
+        label: CONTRACTS[code]?.label ?? code,
+        timesDefended: agg.defended,
+        successCount: agg.success,
+        failCount: agg.fail,
+        successRate: agg.defended > 0 ? agg.success / agg.defended : 0,
+      }))
+      .sort((a, b) => b.timesDefended - a.timesDefended),
   }));
 
   return { gameId, players, evolution };

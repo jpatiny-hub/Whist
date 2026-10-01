@@ -44,6 +44,12 @@ export default function PlayerStatsPage() {
             <div className="value">{stats.averagePointsPerHand.toFixed(1)}</div>
             <div className="label">Points / donne en moyenne</div>
           </div>
+          <div className="stat-tile">
+            <div className="value">{Math.round(stats.defenseSuccessRate * 100)}%</div>
+            <div className="label">
+              Taux de réussite en défense ({stats.totalDefenseWon}/{stats.totalDefended})
+            </div>
+          </div>
         </div>
       </div>
 
@@ -84,13 +90,49 @@ export default function PlayerStatsPage() {
       </div>
 
       <div className="card">
-        <h2>Contrats déclarés</h2>
+        <h2>Contrats déclarés (attaque)</h2>
         {stats.contractStats.length === 0 && <p className="muted">Aucun contrat déclaré pour l'instant.</p>}
         {stats.contractStats.map((c) => (
           <div key={c.contractCode} className="ladder-row">
             <span>{c.label}</span>
             <span className="muted">
               {c.timesDeclared}× — {c.successCount} réussi(s) / {c.failCount} échoué(s) ({Math.round(c.successRate * 100)}%)
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div className="card">
+        <h2>Défense</h2>
+        <p className="muted" style={{ marginTop: 0 }}>
+          Quand ce joueur n'est pas le déclarant : a-t-il fait échouer le contrat adverse ?
+        </p>
+        <div className="ladder-row">
+          <span>Contrat le plus souvent affronté</span>
+          <span>{stats.mostFacedContract ? `${stats.mostFacedContract.label} (${stats.mostFacedContract.timesDefended}×)` : '—'}</span>
+        </div>
+        <div className="ladder-row">
+          <span>Contrat le mieux défendu</span>
+          <span>
+            {stats.bestDefendedContract
+              ? `${stats.bestDefendedContract.label} (${Math.round(stats.bestDefendedContract.successRate * 100)}% de réussite)`
+              : '—'}
+          </span>
+        </div>
+        <div className="ladder-row">
+          <span>Contrat le plus souvent subi</span>
+          <span>
+            {stats.worstDefendedContract
+              ? `${stats.worstDefendedContract.label} (${Math.round((1 - stats.worstDefendedContract.successRate) * 100)}% d'échecs en défense)`
+              : '—'}
+          </span>
+        </div>
+        {stats.defenseStats.length === 0 && <p className="muted">Aucune défense enregistrée pour l'instant.</p>}
+        {stats.defenseStats.map((d) => (
+          <div key={d.contractCode} className="ladder-row">
+            <span>{d.label}</span>
+            <span className="muted">
+              {d.timesDefended}× — {d.successCount} contrat(s) battu(s) / {d.failCount} subi(s) ({Math.round(d.successRate * 100)}%)
             </span>
           </div>
         ))}
