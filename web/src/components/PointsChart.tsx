@@ -1,11 +1,11 @@
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import type { GamePlayer, Hand } from '../types';
+import type { GamePlayer, ScoreableRound } from '../types';
 
-const PALETTE = ['#e7b23c', '#6fbf8b', '#5aa9e6', '#e0654f'];
+const PALETTE = ['#e7b23c', '#6fbf8b', '#5aa9e6', '#e0654f', '#b388eb', '#ff9f68', '#4cc9c0', '#d4a373'];
 
 interface Props {
   seatedPlayers: GamePlayer[];
-  hands: Hand[];
+  hands: ScoreableRound[];
 }
 
 export default function PointsChart({ seatedPlayers, hands }: Props) {

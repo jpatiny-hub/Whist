@@ -9,6 +9,8 @@ import GamePage from './pages/GamePage';
 import GameStatsPage from './pages/GameStatsPage';
 import PlayersPage from './pages/PlayersPage';
 import PlayerStatsPage from './pages/PlayerStatsPage';
+import RikikiPlayerStatsPage from './pages/RikikiPlayerStatsPage';
+import RikikiGameStatsPage from './pages/RikikiGameStatsPage';
 import ContractsReferencePage from './pages/ContractsReferencePage';
 
 function ProtectedRoute({ children }: { children: JSX.Element }) {
@@ -36,8 +38,10 @@ export default function App() {
                 <Route path="/games/new" element={<NewGamePage />} />
                 <Route path="/games/:id" element={<GamePage />} />
                 <Route path="/games/:id/stats" element={<GameStatsPage />} />
+                <Route path="/games/:id/rikiki-stats" element={<RikikiGameStatsPage />} />
                 <Route path="/players" element={<PlayersPage />} />
                 <Route path="/players/:id/stats" element={<PlayerStatsPage />} />
+                <Route path="/players/:id/rikiki-stats" element={<RikikiPlayerStatsPage />} />
                 <Route path="/contracts" element={<ContractsReferencePage />} />
                 <Route path="*" element={<Navigate to="/games" replace />} />
               </Routes>

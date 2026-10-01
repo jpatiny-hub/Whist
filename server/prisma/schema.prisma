@@ -46,21 +46,30 @@ model Player {
   handDeclarations    HandDeclarationPlayer[]
   handPlayerScores    HandPlayerScore[]
   dealtHands          Hand[]                  @relation("HandDealer")
+  rikikiBids          RikikiBid[]
+  dealtRikikiRounds   RikikiRound[]           @relation("RikikiRoundDealer")
 }
 
-/// One playing session ("soirée"), grouping a sequence of hands between the same 4 players.
+/// One playing session ("soirée"), grouping a sequence of hands/rounds between the same players.
 model Game {
   id        String    @id @default(cuid())
+  type      String    @default("WHIST") // WHIST | RIKIKI
   label     String?
   status    String    @default("OPEN") // OPEN | CLOSED
   startedAt DateTime  @default(now())
   endedAt   DateTime?
 
+  // Rikiki-only configuration (ignored for WHIST games).
+  rikikiPeak            Int?
+  rikikiDoublePeak      Boolean? @default(false)
+  rikikiZeroBidPenalty  Boolean? @default(false)
+
   createdByUserId String?
   createdBy       User?   @relation("GameCreatedBy", fields: [createdByUserId], references: [id])
 
-  players GamePlayer[]
-  hands   Hand[]
+  players      GamePlayer[]
+  hands        Hand[]
+  rikikiRounds RikikiRound[]
 }
 
 model GamePlayer {
@@ -69,7 +78,7 @@ model GamePlayer {
   game     Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
   playerId String
   player   Player @relation(fields: [playerId], references: [id])
-  seat     Int // 0..3, fixed seating/dealing order for that game
+  seat     Int // 0-based fixed seating/dealing order for that game (4 seats for whist; variable for rikiki)
 
   @@unique([gameId, playerId])
   @@unique([gameId, seat])
@@ -127,4 +136,36 @@ model HandPlayerScore {
   delta    Int
 
   @@unique([handId, playerId])
+}
+
+/// One round of Rikiki ("l'ascenseur"): a given number of cards dealt to every player.
+model RikikiRound {
+  id          String   @id @default(cuid())
+  gameId      String
+  game        Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  roundNumber Int
+  cardsDealt  Int
+  dealerId    String
+  dealer      Player   @relation("RikikiRoundDealer", fields: [dealerId], references: [id])
+  createdAt   DateTime @default(now())
+
+  bids RikikiBid[]
+
+  @@unique([gameId, roundNumber])
+}
+
+/// One player's bid (and result) for one Rikiki round.
+model RikikiBid {
+  id               String      @id @default(cuid())
+  roundId          String
+  round            RikikiRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  playerId         String
+  player           Player      @relation(fields: [playerId], references: [id])
+  bid              Int
+  tricksWon        Int
+  success          Boolean
+  zeroBidPenalty   Boolean     @default(false)
+  points           Int
+
+  @@unique([roundId, playerId])
 }

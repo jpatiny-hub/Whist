@@ -62,9 +62,14 @@ export default function PlayersPage() {
         {players.map((p) => (
           <div key={p.id} className="ladder-row">
             <span>{p.name}</span>
-            <Link className="link-btn" to={`/players/${p.id}/stats`}>
-              Statistiques →
-            </Link>
+            <span className="btn-row" style={{ gap: 12 }}>
+              <Link className="link-btn" to={`/players/${p.id}/stats`}>
+                Stats Whist →
+              </Link>
+              <Link className="link-btn" to={`/players/${p.id}/rikiki-stats`}>
+                Stats Rikiki →
+              </Link>
+            </span>
           </div>
         ))}
       </div>

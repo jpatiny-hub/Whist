@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireAuth } from '../auth/middleware';
 import { computeGameStats, computeOverviewStats, computePlayerStats } from '../stats';
+import { computeRikikiGameStats, computeRikikiPlayerStats } from '../rikikiStats';
 import { CONTRACT_LADDER, CONTRACTS, listContracts, scoreContract } from '../rules/contracts';
 
 export const statsRouter = Router();
@@ -20,6 +21,18 @@ statsRouter.get('/players/:id', async (req, res) => {
 statsRouter.get('/games/:id', async (req, res) => {
   const stats = await computeGameStats(req.params.id);
   if (!stats) return res.status(404).json({ error: 'Partie introuvable' });
+  res.json({ stats });
+});
+
+statsRouter.get('/rikiki-players/:id', async (req, res) => {
+  const stats = await computeRikikiPlayerStats(req.params.id);
+  if (!stats) return res.status(404).json({ error: 'Joueur introuvable' });
+  res.json({ stats });
+});
+
+statsRouter.get('/rikiki-games/:id', async (req, res) => {
+  const stats = await computeRikikiGameStats(req.params.id);
+  if (!stats) return res.status(404).json({ error: 'Partie Rikiki introuvable' });
   res.json({ stats });
 });
 

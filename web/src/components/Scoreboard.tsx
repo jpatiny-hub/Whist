@@ -1,8 +1,8 @@
-import type { GamePlayer, Hand } from '../types';
+import type { GamePlayer, ScoreableRound } from '../types';
 
 interface Props {
   seatedPlayers: GamePlayer[];
-  hands: Hand[];
+  hands: ScoreableRound[];
 }
 
 export default function Scoreboard({ seatedPlayers, hands }: Props) {

@@ -7,6 +7,7 @@ import { authRouter } from './routes/auth';
 import { playersRouter } from './routes/players';
 import { gamesRouter } from './routes/games';
 import { handsRouter } from './routes/hands';
+import { rikikiRouter } from './routes/rikiki';
 import { statsRouter, contractsRouter } from './routes/stats';
 
 // Load server/.env explicitly (by file location, not by process cwd) so the
@@ -26,6 +27,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/players', playersRouter);
 app.use('/api/games', gamesRouter);
 app.use('/api/games/:gameId/hands', handsRouter);
+app.use('/api/games/:gameId/rounds', rikikiRouter);
 app.use('/api/stats', statsRouter);
 app.use('/api/contracts', contractsRouter);
 

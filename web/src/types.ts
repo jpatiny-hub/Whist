@@ -36,14 +36,47 @@ export interface GamePlayer {
   player: Player;
 }
 
+export type GameType = 'WHIST' | 'RIKIKI';
+
 export interface Game {
   id: string;
+  type: GameType;
   label: string | null;
   status: 'OPEN' | 'CLOSED';
   startedAt: string;
   endedAt: string | null;
+  rikikiPeak: number | null;
+  rikikiDoublePeak: boolean | null;
+  rikikiZeroBidPenalty: boolean | null;
   players: GamePlayer[];
   hands?: Hand[];
+  rikikiRounds?: RikikiRound[];
+}
+
+/** Minimal shape Scoreboard/PointsChart need — satisfied by both Hand and an adapted RikikiRound. */
+export interface ScoreableRound {
+  handNumber: number;
+  playerScores: { playerId: string; delta: number }[];
+}
+
+export interface RikikiBid {
+  id: string;
+  playerId: string;
+  player: Player;
+  bid: number;
+  tricksWon: number;
+  success: boolean;
+  zeroBidPenalty: boolean;
+  points: number;
+}
+
+export interface RikikiRound {
+  id: string;
+  roundNumber: number;
+  cardsDealt: number;
+  dealerId: string;
+  dealer: Player;
+  bids: RikikiBid[];
 }
 
 export interface HandDeclarationPlayer {
@@ -203,4 +236,42 @@ export interface OverviewStats {
   mostWonContract: OverviewContractStat | null;
   mostLostContract: OverviewContractStat | null;
   bestRatioContract: OverviewContractStat | null;
+}
+
+export interface RikikiPairStat {
+  playerId: string;
+  playerName: string;
+  roundsTogether: number;
+  netPointDiff: number;
+}
+
+export interface RikikiPlayerStats {
+  playerId: string;
+  playerName: string;
+  gamesPlayed: number;
+  gamesWon: number;
+  roundsPlayed: number;
+  roundsWon: number;
+  successRate: number;
+  totalPoints: number;
+  averagePointsPerRound: number;
+  longestWinStreak: number;
+  biggestSuccessfulBid: number | null;
+  nemesis: RikikiPairStat | null;
+  souffreDouleur: RikikiPairStat | null;
+  pairStats: RikikiPairStat[];
+}
+
+export interface RikikiGameStatsPlayer {
+  playerId: string;
+  playerName: string;
+  totalPoints: number;
+  roundsWon: number;
+  roundsPlayed: number;
+}
+
+export interface RikikiGameStats {
+  gameId: string;
+  players: RikikiGameStatsPlayer[];
+  evolution: { handNumber: number; totals: Record<string, number> }[];
 }

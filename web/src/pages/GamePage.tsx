@@ -5,6 +5,7 @@ import type { ContractDef, Game } from '../types';
 import Scoreboard from '../components/Scoreboard';
 import PointsChart from '../components/PointsChart';
 import HandForm from '../components/HandForm';
+import RikikiGameView from '../components/RikikiGameView';
 
 export default function GamePage() {
   const { id } = useParams<{ id: string }>();
@@ -46,6 +47,10 @@ export default function GamePage() {
   }
 
   if (loading || !game) return <p className="muted">Chargement…</p>;
+
+  if (game.type === 'RIKIKI') {
+    return <RikikiGameView game={game} seatedPlayers={seatedPlayers} onReload={load} onClose={closeGame} />;
+  }
 
   const hands = game.hands ?? [];
   const editingHand = hands.find((h) => h.id === editingHandId) ?? null;
