@@ -166,7 +166,7 @@ export async function computePlayerStats(playerId: string): Promise<PlayerStats 
   const mostSuccessfulContract =
     [...contractStats].sort((a, b) => b.successRate - a.successRate || b.timesDeclared - a.timesDeclared)[0] ?? null;
   const mostFailedContract =
-    [...contractStats].sort((a, b) => 1 - a.successRate - (1 - b.successRate) || b.timesDeclared - a.timesDeclared)[0] ?? null;
+    [...contractStats].sort((a, b) => a.successRate - b.successRate || b.timesDeclared - a.timesDeclared)[0] ?? null;
 
   const pairStats: PairStat[] = [...pairAgg.entries()].map(([otherId, agg]) => ({
     playerId: otherId,
@@ -195,7 +195,7 @@ export async function computePlayerStats(playerId: string): Promise<PlayerStats 
   const bestDefendedContract =
     [...defenseStats].sort((a, b) => b.successRate - a.successRate || b.timesDefended - a.timesDefended)[0] ?? null;
   const worstDefendedContract =
-    [...defenseStats].sort((a, b) => 1 - a.successRate - (1 - b.successRate) || b.timesDefended - a.timesDefended)[0] ?? null;
+    [...defenseStats].sort((a, b) => a.successRate - b.successRate || b.timesDefended - a.timesDefended)[0] ?? null;
 
   const favoritePartner =
     [...pairStats].filter((p) => p.timesPartnered > 0).sort((a, b) => b.timesPartnered - a.timesPartnered)[0] ?? null;
