@@ -34,7 +34,7 @@ export default function GamePage() {
     const hands = game.hands ?? [];
     const last = hands[hands.length - 1];
     if (!last) return seatedPlayers[0].playerId;
-    if (last.passedRound) return last.dealerId;
+    // The deal always rotates to the next player, including after a passed round.
     const idx = seatedPlayers.findIndex((p) => p.playerId === last.dealerId);
     return seatedPlayers[(idx + 1) % seatedPlayers.length].playerId;
   }, [game, seatedPlayers]);

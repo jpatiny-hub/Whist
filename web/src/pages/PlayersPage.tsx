@@ -146,6 +146,32 @@ export default function PlayersPage() {
           </div>
 
           <div className="card">
+            <h2>Couleurs d'atout (tous joueurs confondus)</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Couleur</th>
+                  <th>Annoncée</th>
+                  <th>Part</th>
+                  <th>Réussite</th>
+                  <th>Part le plus souvent avec</th>
+                </tr>
+              </thead>
+              <tbody>
+                {overview.globalTrumpStats.map((t) => (
+                  <tr key={t.suit}>
+                    <td>{t.label}</td>
+                    <td>{t.timesUsed}</td>
+                    <td className="muted">{t.timesUsed > 0 ? `${Math.round(t.percentage * 100)}%` : '—'}</td>
+                    <td className="muted">{t.timesUsed > 0 ? `${Math.round(t.successRate * 100)}%` : '—'}</td>
+                    <td className="muted">{t.topPlayer ? `${t.topPlayer.playerName} (${t.topPlayer.timesUsed}×)` : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="card">
             <h2>Tous les contrats annoncés (tous joueurs confondus)</h2>
             <table>
               <thead>

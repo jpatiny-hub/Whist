@@ -1,5 +1,12 @@
 import { prisma } from './db';
-import { CONTRACT_LADDER, CONTRACTS } from './rules/contracts';
+import { CONTRACT_LADDER, CONTRACTS, TRUMP_ORDER, type TrumpSuit } from './rules/contracts';
+
+const SUIT_LABELS: Record<Exclude<TrumpSuit, null>, string> = {
+  COEUR: '♥ Cœur',
+  CARREAU: '♦ Carreau',
+  TREFLE: '♣ Trèfle',
+  PIQUE: '♠ Pique',
+};
 
 interface ContractStat {
   contractCode: string;
@@ -31,6 +38,16 @@ interface PairStat {
   partnerFailCount: number;
   /** Times this player's own attack (as declarer) failed while this person was one of the defenders. */
   failedAttacksAgainst: number;
+}
+
+export interface TrumpStat {
+  suit: string;
+  label: string;
+  timesUsed: number;
+  percentage: number;
+  successCount: number;
+  failCount: number;
+  successRate: number;
 }
 
 export interface ContractBreakdown {
@@ -72,6 +89,8 @@ export interface PlayerStats {
   beteNoire: PairStat | null;
   pairStats: PairStat[];
   contractBreakdown: ContractBreakdown[];
+  trumpStats: TrumpStat[];
+  favoriteTrump: TrumpStat | null;
 }
 
 export async function computePlayerStats(playerId: string): Promise<PlayerStats | null> {
@@ -99,6 +118,7 @@ export async function computePlayerStats(playerId: string): Promise<PlayerStats 
 
   const contractAgg = new Map<string, { declared: number; success: number; fail: number }>();
   const defenseAgg = new Map<string, { defended: number; success: number; fail: number }>();
+  const trumpAgg = new Map<string, { used: number; success: number; fail: number }>();
   const pairAgg = new Map<
     string,
     { handsTogether: number; netPointDiff: number; partnered: number; partnerSuccess: number; partnerFail: number; failedAttacksAgainst: number }
@@ -147,6 +167,14 @@ export async function computePlayerStats(playerId: string): Promise<PlayerStats 
           if (decl.success) agg.success += 1;
           else agg.fail += 1;
           contractAgg.set(decl.contractCode, agg);
+
+          if (decl.trumpSuit) {
+            const tAgg = trumpAgg.get(decl.trumpSuit) ?? { used: 0, success: 0, fail: 0 };
+            tAgg.used += 1;
+            if (decl.success) tAgg.success += 1;
+            else tAgg.fail += 1;
+            trumpAgg.set(decl.trumpSuit, tAgg);
+          }
 
           for (const otherId of declarerIds) {
             if (otherId === playerId) continue;
@@ -237,6 +265,21 @@ export async function computePlayerStats(playerId: string): Promise<PlayerStats 
   const beteNoire =
     [...pairStats].filter((p) => p.failedAttacksAgainst > 0).sort((a, b) => b.failedAttacksAgainst - a.failedAttacksAgainst)[0] ?? null;
 
+  const totalTrumpDeclarations = [...trumpAgg.values()].reduce((sum, t) => sum + t.used, 0);
+  const trumpStats: TrumpStat[] = TRUMP_ORDER.map((suit) => {
+    const t = trumpAgg.get(suit);
+    return {
+      suit,
+      label: SUIT_LABELS[suit],
+      timesUsed: t?.used ?? 0,
+      percentage: t && totalTrumpDeclarations > 0 ? t.used / totalTrumpDeclarations : 0,
+      successCount: t?.success ?? 0,
+      failCount: t?.fail ?? 0,
+      successRate: t && t.used > 0 ? t.success / t.used : 0,
+    };
+  });
+  const favoriteTrump = [...trumpStats].filter((t) => t.timesUsed > 0).sort((a, b) => b.timesUsed - a.timesUsed)[0] ?? null;
+
   const contractBreakdown: ContractBreakdown[] = CONTRACT_LADDER.map((code) => {
     const atk = contractAgg.get(code);
     const def = defenseAgg.get(code);
@@ -279,6 +322,8 @@ export async function computePlayerStats(playerId: string): Promise<PlayerStats 
     beteNoire,
     pairStats: pairStats.sort((a, b) => b.handsTogether - a.handsTogether),
     contractBreakdown,
+    trumpStats,
+    favoriteTrump,
   };
 }
 
@@ -399,6 +444,17 @@ export interface OverviewContractStat {
   successRate: number;
 }
 
+export interface OverviewTrumpStat {
+  suit: string;
+  label: string;
+  timesUsed: number;
+  percentage: number;
+  successCount: number;
+  failCount: number;
+  successRate: number;
+  topPlayer: { playerId: string; playerName: string; timesUsed: number } | null;
+}
+
 export interface OverviewStats {
   players: OverviewPlayer[];
   bestPlayer: OverviewPlayer | null;
@@ -408,6 +464,7 @@ export interface OverviewStats {
   mostWonContract: OverviewContractStat | null;
   mostLostContract: OverviewContractStat | null;
   bestRatioContract: OverviewContractStat | null;
+  globalTrumpStats: OverviewTrumpStat[];
 }
 
 /** Minimum number of announcements before a contract is eligible for the "best win ratio" spotlight, to avoid a lone 1/1 dominating. */
@@ -431,6 +488,8 @@ export async function computeOverviewStats(): Promise<OverviewStats> {
   for (const p of players) perPlayer.set(p.id, { gamesPlayed: 0, gamesWon: 0, handsPlayed: 0, totalPoints: 0 });
 
   const globalAgg = new Map<string, { declared: number; success: number; fail: number }>();
+  const globalTrumpAgg = new Map<string, { used: number; success: number; fail: number }>();
+  const trumpByPlayer = new Map<string, Map<string, number>>(); // suit -> playerId -> count
 
   for (const game of games) {
     const gameTotals = new Map<string, number>();
@@ -454,6 +513,20 @@ export async function computeOverviewStats(): Promise<OverviewStats> {
         if (decl.success) agg.success += 1;
         else agg.fail += 1;
         globalAgg.set(decl.contractCode, agg);
+
+        if (decl.trumpSuit) {
+          const tAgg = globalTrumpAgg.get(decl.trumpSuit) ?? { used: 0, success: 0, fail: 0 };
+          tAgg.used += 1;
+          if (decl.success) tAgg.success += 1;
+          else tAgg.fail += 1;
+          globalTrumpAgg.set(decl.trumpSuit, tAgg);
+
+          const byPlayer = trumpByPlayer.get(decl.trumpSuit) ?? new Map<string, number>();
+          for (const d of decl.declarers) {
+            byPlayer.set(d.playerId, (byPlayer.get(d.playerId) ?? 0) + 1);
+          }
+          trumpByPlayer.set(decl.trumpSuit, byPlayer);
+        }
       }
     }
     if (gameTotals.size > 0) {
@@ -489,6 +562,26 @@ export async function computeOverviewStats(): Promise<OverviewStats> {
     };
   });
 
+  const playerNameById = new Map(players.map((p) => [p.id, p.name]));
+  const totalGlobalTrumpDeclarations = [...globalTrumpAgg.values()].reduce((sum, t) => sum + t.used, 0);
+  const globalTrumpStats: OverviewTrumpStat[] = TRUMP_ORDER.map((suit) => {
+    const t = globalTrumpAgg.get(suit);
+    const byPlayer = trumpByPlayer.get(suit);
+    const topEntry = byPlayer ? [...byPlayer.entries()].sort((a, b) => b[1] - a[1])[0] : undefined;
+    return {
+      suit,
+      label: SUIT_LABELS[suit],
+      timesUsed: t?.used ?? 0,
+      percentage: t && totalGlobalTrumpDeclarations > 0 ? t.used / totalGlobalTrumpDeclarations : 0,
+      successCount: t?.success ?? 0,
+      failCount: t?.fail ?? 0,
+      successRate: t && t.used > 0 ? t.success / t.used : 0,
+      topPlayer: topEntry
+        ? { playerId: topEntry[0], playerName: playerNameById.get(topEntry[0]) ?? topEntry[0], timesUsed: topEntry[1] }
+        : null,
+    };
+  });
+
   const declaredOnly = globalContractStats.filter((c) => c.timesDeclared > 0);
   const mostPlayedContract = [...declaredOnly].sort((a, b) => b.timesDeclared - a.timesDeclared)[0] ?? null;
   const mostWonContract = [...declaredOnly].sort((a, b) => b.successCount - a.successCount)[0] ?? null;
@@ -507,5 +600,6 @@ export async function computeOverviewStats(): Promise<OverviewStats> {
     mostWonContract,
     mostLostContract,
     bestRatioContract,
+    globalTrumpStats,
   };
 }

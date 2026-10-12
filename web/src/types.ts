@@ -132,6 +132,16 @@ export interface PairStat {
   failedAttacksAgainst: number;
 }
 
+export interface TrumpStat {
+  suit: string;
+  label: string;
+  timesUsed: number;
+  percentage: number;
+  successCount: number;
+  failCount: number;
+  successRate: number;
+}
+
 export interface ContractBreakdown {
   contractCode: string;
   label: string;
@@ -179,6 +189,8 @@ export interface PlayerStats {
   beteNoire: PairStat | null;
   pairStats: PairStat[];
   contractBreakdown: ContractBreakdown[];
+  trumpStats: TrumpStat[];
+  favoriteTrump: TrumpStat | null;
 }
 
 export interface GameStatsPlayer {
@@ -227,6 +239,17 @@ export interface OverviewContractStat {
   successRate: number;
 }
 
+export interface OverviewTrumpStat {
+  suit: string;
+  label: string;
+  timesUsed: number;
+  percentage: number;
+  successCount: number;
+  failCount: number;
+  successRate: number;
+  topPlayer: { playerId: string; playerName: string; timesUsed: number } | null;
+}
+
 export interface OverviewStats {
   players: OverviewPlayer[];
   bestPlayer: OverviewPlayer | null;
@@ -236,6 +259,7 @@ export interface OverviewStats {
   mostWonContract: OverviewContractStat | null;
   mostLostContract: OverviewContractStat | null;
   bestRatioContract: OverviewContractStat | null;
+  globalTrumpStats: OverviewTrumpStat[];
 }
 
 export interface RikikiPairStat {

@@ -154,6 +154,41 @@ export default function PlayerStatsPage() {
       </div>
 
       <div className="card">
+        <h2>Couleurs d'atout</h2>
+        <p className="muted" style={{ marginTop: 0 }}>
+          Répartition des couleurs annoncées en attaque et taux de réussite de chacune.
+        </p>
+        <div className="ladder-row">
+          <span>Couleur favorite</span>
+          <span>
+            {stats.favoriteTrump
+              ? `${stats.favoriteTrump.label} (${Math.round(stats.favoriteTrump.percentage * 100)}% des annonces)`
+              : '—'}
+          </span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Couleur</th>
+              <th>Annoncée</th>
+              <th>Part</th>
+              <th>Réussite</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stats.trumpStats.map((t) => (
+              <tr key={t.suit}>
+                <td>{t.label}</td>
+                <td className="muted">{t.timesUsed}</td>
+                <td className="muted">{t.timesUsed > 0 ? `${Math.round(t.percentage * 100)}%` : '—'}</td>
+                <td className="muted">{t.timesUsed > 0 ? `${Math.round(t.successRate * 100)}%` : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="card">
         <h2>Face à chaque joueur</h2>
         {stats.pairStats.map((p) => (
           <div key={p.playerId} className="ladder-row">
