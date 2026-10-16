@@ -10,6 +10,10 @@ export default function PlayersPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [mergeKeepId, setMergeKeepId] = useState('');
+  const [mergeDuplicateId, setMergeDuplicateId] = useState('');
+  const [mergeError, setMergeError] = useState<string | null>(null);
+  const [mergeBusy, setMergeBusy] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -18,10 +22,44 @@ export default function PlayersPage() {
     setLoading(false);
   }
 
+  async function loadOverview() {
+    const res = await api<{ stats: OverviewStats }>('/stats/overview');
+    setOverview(res.stats);
+  }
+
   useEffect(() => {
     load();
-    api<{ stats: OverviewStats }>('/stats/overview').then((res) => setOverview(res.stats));
+    loadOverview();
   }, []);
+
+  async function onMerge(e: FormEvent) {
+    e.preventDefault();
+    if (!mergeKeepId || !mergeDuplicateId || mergeKeepId === mergeDuplicateId) return;
+    const keepName = players.find((p) => p.id === mergeKeepId)?.name ?? '';
+    const duplicateName = players.find((p) => p.id === mergeDuplicateId)?.name ?? '';
+    if (
+      !confirm(
+        `Fusionner « ${duplicateName} » dans « ${keepName} » ? Tout l'historique de « ${duplicateName} » sera transféré à « ${keepName} », puis le profil « ${duplicateName} » sera définitivement supprimé. Cette action est irréversible.`,
+      )
+    ) {
+      return;
+    }
+    setMergeError(null);
+    setMergeBusy(true);
+    try {
+      await api(`/players/${mergeKeepId}/merge`, {
+        method: 'POST',
+        body: JSON.stringify({ duplicatePlayerId: mergeDuplicateId }),
+      });
+      setMergeKeepId('');
+      setMergeDuplicateId('');
+      await Promise.all([load(), loadOverview()]);
+    } catch (err) {
+      setMergeError(err instanceof ApiError ? err.message : 'Erreur');
+    } finally {
+      setMergeBusy(false);
+    }
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -73,6 +111,44 @@ export default function PlayersPage() {
           </div>
         ))}
       </div>
+
+      {players.length >= 2 && (
+        <div className="card">
+          <h2>Fusionner deux profils en double</h2>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Si un même joueur a été ajouté deux fois par erreur, fusionne les deux profils : tout l'historique du profil en
+            double (parties, annonces, points) est transféré vers le profil à garder, puis le doublon est supprimé.
+          </p>
+          {mergeError && <div className="error-box">{mergeError}</div>}
+          <form onSubmit={onMerge} className="btn-row" style={{ alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label htmlFor="mergeKeep">Profil à garder</label>
+              <select id="mergeKeep" value={mergeKeepId} onChange={(e) => setMergeKeepId(e.target.value)}>
+                <option value="">—</option>
+                {players.map((p) => (
+                  <option key={p.id} value={p.id} disabled={p.id === mergeDuplicateId}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label htmlFor="mergeDuplicate">Profil en double (sera supprimé)</label>
+              <select id="mergeDuplicate" value={mergeDuplicateId} onChange={(e) => setMergeDuplicateId(e.target.value)}>
+                <option value="">—</option>
+                {players.map((p) => (
+                  <option key={p.id} value={p.id} disabled={p.id === mergeKeepId}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button className="btn danger" type="submit" disabled={!mergeKeepId || !mergeDuplicateId || mergeBusy}>
+              Fusionner
+            </button>
+          </form>
+        </div>
+      )}
 
       {overview && (
         <>
