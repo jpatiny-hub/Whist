@@ -12,6 +12,9 @@ RUN npm install
 COPY server server
 COPY web web
 
+# The API is served from the same origin as the web app, so call it relatively
+# (otherwise the build falls back to http://localhost:4000/api).
+ENV VITE_API_URL=/api
 RUN npm run build --workspace web
 RUN npm run --workspace server prisma:generate
 
