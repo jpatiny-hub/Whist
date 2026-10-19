@@ -39,6 +39,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(u);
   }, []);
 
+  useEffect(() => {
+    // Fired by the API client when a request comes back 401: the token expired
+    // or was invalidated server-side. Clear the stale session so the route
+    // guard sends the user back to /login instead of leaving every page
+    // stuck on "Chargement…" forever.
+    function onSessionExpired() {
+      setToken(null);
+      localStorage.removeItem('whist_user');
+      setUser(null);
+    }
+    window.addEventListener('whist:session-expired', onSessionExpired);
+    return () => window.removeEventListener('whist:session-expired', onSessionExpired);
+  }, []);
+
   const login = useCallback(
     async (email: string, password: string) => {
       const res = await api<{ token: string; user: AuthUser }>('/auth/login', {

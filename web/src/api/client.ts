@@ -24,6 +24,13 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   const body = isJson ? await res.json() : null;
 
   if (!res.ok) {
+    // A 401 on an authenticated call means the token expired or is invalid (not
+    // a login/register attempt, which the caller already handles on its own) —
+    // force a clean logout instead of leaving every page stuck on "Chargement…".
+    if (res.status === 401 && token) {
+      sessionStorage.setItem('whist_session_expired', '1');
+      window.dispatchEvent(new Event('whist:session-expired'));
+    }
     throw new ApiError(body?.error ?? `Erreur ${res.status}`);
   }
   return body as T;
