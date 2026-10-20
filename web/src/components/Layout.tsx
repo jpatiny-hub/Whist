@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import Cobweb from './Cobweb';
 
 export default function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
@@ -8,6 +9,8 @@ export default function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="app-shell">
       <header className="app-header">
+        <Cobweb corner="tl" />
+        <Cobweb corner="tr" />
         <h1>🎃 Whist Scoreboard</h1>
         {user && (
           <button className="link-btn" onClick={logout}>
@@ -17,12 +20,14 @@ export default function Layout({ children }: { children: ReactNode }) {
       </header>
       <main className="app-main">{children}</main>
       <nav className="bottom-nav">
+        <Cobweb corner="bl" />
+        <Cobweb corner="br" />
         <NavLink to="/games" className={({ isActive }) => (isActive ? 'active' : '')} end>
-          <span className="icon">🃏</span>
+          <span className="icon bloodied">🃏</span>
           Parties
         </NavLink>
         <NavLink to="/players" className={({ isActive }) => (isActive ? 'active' : '')}>
-          <span className="icon">👥</span>
+          <span className="icon">👻</span>
           Joueurs
         </NavLink>
         <NavLink to="/contracts" className={({ isActive }) => (isActive ? 'active' : '')}>

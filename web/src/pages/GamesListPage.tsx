@@ -28,11 +28,14 @@ export default function GamesListPage() {
       {games.map((g) => (
         <Link key={g.id} to={`/games/${g.id}`} className="card" style={{ display: 'block', textDecoration: 'none' }}>
           <h2>
+            <span className="game-card-icon" aria-hidden="true">
+              {g.type === 'RIKIKI' ? '👻' : '🃏'}
+            </span>{' '}
             {g.label || 'Partie sans nom'}{' '}
             <span className="badge" style={{ background: 'rgba(255,255,255,.1)', color: 'var(--text-dim)' }}>
               {g.type === 'RIKIKI' ? 'Rikiki' : 'Whist'}
             </span>{' '}
-            <span className="badge" style={{ background: g.status === 'OPEN' ? 'rgba(111,191,139,.2)' : 'rgba(255,255,255,.1)', color: g.status === 'OPEN' ? 'var(--success)' : 'var(--text-dim)' }}>
+            <span className="badge" style={{ background: g.status === 'OPEN' ? 'rgba(125,221,60,.2)' : 'rgba(255,255,255,.1)', color: g.status === 'OPEN' ? 'var(--success)' : 'var(--text-dim)' }}>
               {g.status === 'OPEN' ? 'en cours' : 'clôturée'}
             </span>
           </h2>

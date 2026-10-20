@@ -28,8 +28,10 @@ body {
   margin: 0;
   background: var(--bg);
   background-image: radial-gradient(circle at 15% 0%, rgba(124, 58, 150, 0.25), transparent 45%),
-    radial-gradient(circle at 85% 100%, rgba(244, 129, 29, 0.1), transparent 40%);
+    radial-gradient(circle at 85% 100%, rgba(244, 129, 29, 0.1), transparent 40%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 220'%3E%3Ctext x='24' y='60' font-size='30' opacity='.16' transform='rotate(-10 24 60)'%3E%F0%9F%92%80%3C/text%3E%3Ctext x='150' y='40' font-size='20' opacity='.12' transform='rotate(8 150 40)'%3E%F0%9F%A6%87%3C/text%3E%3Ctext x='160' y='175' font-size='22' opacity='.13' transform='rotate(15 160 175)'%3E%F0%9F%92%80%3C/text%3E%3Ctext x='40' y='150' font-size='18' opacity='.11' transform='rotate(-12 40 150)'%3E%F0%9F%A6%87%3C/text%3E%3C/svg%3E");
   background-attachment: fixed;
+  background-repeat: no-repeat, no-repeat, repeat;
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -67,6 +69,58 @@ select {
 .app-header h1 {
   font-size: 18px;
   margin: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.app-header > .link-btn {
+  position: relative;
+  z-index: 1;
+}
+
+/* A thin row of dripping-blood marks along the header's bottom edge — decorative only. */
+.app-header::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -5px;
+  height: 5px;
+  background-image: repeating-linear-gradient(90deg, rgba(215, 38, 61, 0.55) 0 3px, transparent 3px 22px);
+  pointer-events: none;
+}
+
+/* Purely decorative corner cobwebs on the header and bottom nav. */
+.cobweb {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  color: rgba(246, 236, 255, 0.3);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.cobweb-tl {
+  top: 0;
+  left: 0;
+}
+
+.cobweb-tr {
+  top: 0;
+  right: 0;
+  transform: scaleX(-1);
+}
+
+.cobweb-bl {
+  bottom: 0;
+  left: 0;
+  transform: scaleY(-1);
+}
+
+.cobweb-br {
+  bottom: 0;
+  right: 0;
+  transform: scale(-1, -1);
 }
 
 .app-main {
@@ -100,6 +154,8 @@ select {
   text-decoration: none;
   font-size: 11px;
   color: var(--text-dim);
+  position: relative;
+  z-index: 1;
 }
 
 .bottom-nav a.active {
@@ -108,6 +164,15 @@ select {
 
 .bottom-nav .icon {
   font-size: 20px;
+}
+
+.icon.bloodied {
+  filter: drop-shadow(0 3px 1px rgba(215, 38, 61, 0.7));
+}
+
+.game-card-icon {
+  display: inline-block;
+  filter: drop-shadow(0 2px 1px rgba(215, 38, 61, 0.55));
 }
 
 .card {
