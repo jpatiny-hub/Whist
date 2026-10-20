@@ -12,8 +12,8 @@ export default defineConfig({
         name: 'Whist Scoreboard',
         short_name: 'Whist',
         description: 'Calcul des points et statistiques pour le whist à la couleur',
-        theme_color: '#144d3a',
-        background_color: '#0f3b2c',
+        theme_color: '#1b1225',
+        background_color: '#120b1a',
         display: 'standalone',
         start_url: '/',
         icons: [

@@ -8,7 +8,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <h1>♦ Whist Scoreboard</h1>
+        <h1>🎃 Whist Scoreboard</h1>
         {user && (
           <button className="link-btn" onClick={logout}>
             Déconnexion ({user.name})
